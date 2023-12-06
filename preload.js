@@ -17,4 +17,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // console.log(directory)
     return ipcRenderer.invoke('openFile',filePath);
   },
+  deleteFile:(filePath) => {
+    console.log(filePath,'preload');
+    return ipcRenderer.invoke('deleteFile',filePath);
+  },
+  uploadFile:(fileName, sourcePath, destinationPath) => {
+    // console.log(sourcePath, destinationPath,"preload");
+    return ipcRenderer.invoke('uploadFile', { fileName,sourcePath, destinationPath });
+  },
 }); 

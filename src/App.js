@@ -13,23 +13,26 @@ const { Search } = Input;
 const headerStyle = {
   textAlign: 'center',
   color: '#8c8c8c',
-  height: 100,
-  paddingInline: 50,
+  height: "100px",
+  // paddingInline: 50,
   lineHeight: '64px',
   backgroundColor: '#f5f5f5',
 };
 const contentStyle = {
   textAlign: 'center',
-  minHeight: 400,
-  lineHeight: '120px',
+  minHeight: "200px",
+  height: "400px",
+  maxHeight: "400px",
+  lineHeight: '60px',
   color: '#8c8c8c',
   backgroundColor: '#fff7e6',
 };
 const siderStyle = {
   textAlign: 'center',
-  lineHeight: '120px',
-  color: '#8c8c8c',
-  backgroundColor: '#f6ffed',
+  lineHeight: '60px',
+  height: "500px",
+  color: '#096dd9',
+  backgroundColor: '#ffffff',
 };
 
 const category_button = {
@@ -40,15 +43,17 @@ const category_button = {
   margin: '5px 0px',
 
 };
-
-const dragger_style={
-  height: 50,
-}
-
 const props = {
   name: 'file',
   multiple: true,
-  action: 'https://run.mocky.io/v3/435e224c-44fb-4773-9faf-380c5e6a2188',
+  // action: 'https://run.mocky.io/v3/435e224c-44fb-4773-9faf-380c5e6a2188',
+  customRequest: ({ file, onSuccess }) => {
+    const result = window.electronAPI.uploadFile(file);
+    console.log(file);
+    setTimeout(() => {
+      onSuccess("ok");
+    }, 0);
+  },
   onChange(info) {
     const { status } = info.file;
     if (status !== 'uploading') {
@@ -105,43 +110,32 @@ function App() {
     setActivedFoler(folder);
   };
 
-  async function initFolder() {
-    const result = await window.electronAPI.initFolder();
-    const folderPath = result.folderPath;
-    const folderContents = result.folderContents;
-    setFolder(folderContents);
-  };
 
-  initFolder();
+
   async function openFile(file) {
     const result = await window.electronAPI.openFile(activeFolder+"\\"+file);
   };
+  async function deleteFile(file) {
+    const result = await window.electronAPI.deleteFile(file);
+    showFolder(activeFolder);
+  }
   
-  // useEffect(() => {
-  //   // 异步函数用来获取文件夹内文件的信息
-  //   const fetchFiles = async () => {
-  //     try {
-  //       // 调用异步函数获取文件信息
-  //       const filesData = await window.electronAPI.listFolder(activeFolder); // 替换成你的实际异步函数调用
-
-  //       // 将获取到的文件信息保存在状态中
-  //       setFiles(filesData);
-  //     } catch (error) {
-  //       console.error('Error fetching files:', error);
-  //     } finally {
-  //       // 数据加载完成，设置loading为false
-  //       setLoading(false);
-  //     }
-  //   };
+  useEffect(() => {
+    async function initFolder() {
+      const result = await window.electronAPI.initFolder();
+      const folderPath = result.folderPath;
+      const folderContents = result.folderContents;
+      setFolder(folderContents);
+    };
+    initFolder();
 
   //   // 调用异步函数
   //   fetchFiles();
-  // }, []); // 空数组表示只在组件挂载时调用一次
+  }, []); // 空数组表示只在组件挂载时调用一次
 
   // // 根据加载状态渲染不同的内容
   // if (loading) {
   //   return 
-  // }
 
   return (
     <div className="App ">
@@ -164,9 +158,9 @@ function App() {
                 增加类别
               </Button>
             </Flex>
-            <div>
+            {/* <div>
               <DragAndDropArea />
-            </div>
+            </div> */}
             {/* <Button type="primary" style={buttonStyle} block>
           Primary
         </Button> */}
@@ -174,7 +168,32 @@ function App() {
         </Sider>
         <Layout>
           <Header style={headerStyle}>
-          <Dragger {...props} style={dragger_style}>
+          <Dragger
+            name='file'
+            multiple={true}
+            customRequest={({ file, onSuccess}) => {
+              const result = window.electronAPI.uploadFile(file.name,file.path,activeFolder);
+              console.log(file);
+              setTimeout(() => {
+                onSuccess("ok");
+              }, 0);
+            }}
+            onChange={(info) => {
+              const { status } = info.file;
+              if (status !== 'uploading') {
+                console.log(info.file, info.fileList);
+              }
+              if (status === 'done') {
+                showFolder(activeFolder)
+                message.success(`${info.file.name} file uploaded successfully.`);
+              } else if (status === 'error') {
+                message.error(`${info.file.name} file upload failed.`);
+              }
+            }}
+            onDrop={(e) => {
+              console.log('Dropped files', e.dataTransfer.files);
+            }}
+          >
             <p className="ant-upload-drag-icon">
               <InboxOutlined />
             </p>
@@ -189,6 +208,7 @@ function App() {
               <ItemList
                 items={files}
                 openFile={openFile}
+                deleteFile={deleteFile}
               // activeFolder={activeFolder}
               />
             }

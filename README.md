@@ -1,3 +1,5 @@
+# 开发日志：
+12/06: 对表格进行美化，实现了文件删除，导入文件、删除文件时刷新，表格美化，重写ant design的上传方法从而将文件可以拖拽传入文件夹内
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).

@@ -8,6 +8,7 @@ const Category = ({categorys,clickFoler}) => {
           mode="inline"
           defaultSelectedKeys={['1']}
           onClick={clickFoler}
+          theme="light"
           items={
             categorys.map((category) => ({
               key: category.path+"\\"+category.name,

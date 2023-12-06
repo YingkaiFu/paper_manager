@@ -120,6 +120,8 @@ function createWindow () {
   const win = new BrowserWindow({
     width: 1200,
     height: 600,
+    resizable: false, // 禁止调整窗口大小
+
     webPreferences: {
       preload: path.join(__dirname, 'preload.js')
     }
@@ -127,7 +129,7 @@ function createWindow () {
 
   // 加载应用的 index.html
   const urlLocation = isDev ? 'http://localhost:3000' : 'dummyurl'
-  win.webContents.openDevTools();
+  // win.webContents.openDevTools();
   win.loadURL(urlLocation);
 //   win.loadFile('index.html');
 
@@ -193,6 +195,30 @@ ipcMain.handle('openFile', async (event, filePath) => {
           console.error('Error opening file:', response);
       }
   });
+});
+ipcMain.handle('deleteFile', async (event, filePath) => {
+  console.log(filePath,'ipcdelete');
+  fs.unlink(filePath, (err) => {
+    if (err) {
+        console.error('File delete failed:', err);
+        return false;
+    } else {
+        console.log('File deleted successfully');
+        return true;
+    }
+});
+});
+
+ipcMain.handle('uploadFile', (event,{fileName, sourcePath, destinationPath }) => {
+  fs.cp(sourcePath, path.join(destinationPath,fileName), (err) => {
+    if (err) {
+        console.error('File copy failed:', err);
+        return false;
+    } else {
+        console.log('File copied successfully');
+        return true;
+    }
+});
 });
 // ipcMain.handle('listFolder',async (event,folderPath) => {
 //   const folderContents = fs.readdirSync(folderPath, { withFileTypes: true })
