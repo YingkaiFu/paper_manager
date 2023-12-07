@@ -78,31 +78,25 @@ function App() {
   //   setActivedFoler(id);
   // }
   const [Folder, setFolder] = useState([]);
-  
+  const [rootFolder, setRootFolder] = useState("");
   const [activeFolder, setActivedFoler] = useState("");
 
-  // const database = window.electronAPI.listFolder(activeFolder);
-  // const ItemList = Folder.map((item) => {
-  //   return  database
-  // })
-  // async function getFolerItems(folder) {
-  //   const result = await window.electronAPI.listFolder(folder);
-  //   return result
-  // }
+
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   // 定义状态来保存文件信息
   async function opendilog() {
     const result = await window.electronAPI.openDialog();
     if (result){
+      console.log(result,"app");
     const folderPath = result.folderPath;
     const folderContents = result.folderContents;
+    setRootFolder(folderPath);
     setFolder(folderContents)
     }
   };
 
   async function showFolder(folder) {
-    console.log(folder);
     const result = await window.electronAPI.listFolder(folder);
     // const folderContents = result.folderContents;
     // console.log(folderContents);
@@ -110,8 +104,17 @@ function App() {
     setActivedFoler(folder);
   };
 
-
-
+  async function onRenameClick(src, des) {
+    // 更新类别的名字
+    const result = await window.electronAPI.renameFolder(src,des);
+    setFolder(result)
+    setActivedFoler(des);
+  }
+  async function addfoler() {
+    const result =  await window.electronAPI.addFolder(rootFolder);
+    // const folderContents = result.folderContents;
+    setFolder(result)
+  };
   async function openFile(file) {
     const result = await window.electronAPI.openFile(activeFolder+"\\"+file);
   };
@@ -126,9 +129,9 @@ function App() {
       const folderPath = result.folderPath;
       const folderContents = result.folderContents;
       setFolder(folderContents);
+      setRootFolder(folderPath);
     };
     initFolder();
-
   //   // 调用异步函数
   //   fetchFiles();
   }, []); // 空数组表示只在组件挂载时调用一次
@@ -148,13 +151,13 @@ function App() {
             <Category
               categorys={Folder}
               clickFoler={(id) => { showFolder(id.key); }}
-            // clickFoler={listFoler}
+              onRenameClick={(src,des)=>{onRenameClick(src,des)}}
             />
             <Flex vertical style={{ width: '100%', bottom: 0, position: "absolute", }}>
               <Button type="primary" style={category_button} block onClick={opendilog} >
                 导入文献
               </Button>
-              <Button type="primary" style={category_button} block>
+              <Button type="primary" style={category_button} block onClick={addfoler}>
                 增加类别
               </Button>
             </Flex>

@@ -120,7 +120,7 @@ function createWindow () {
   const win = new BrowserWindow({
     width: 1200,
     height: 600,
-    resizable: false, // 禁止调整窗口大小
+    // resizable: false, // 禁止调整窗口大小
 
     webPreferences: {
       preload: path.join(__dirname, 'preload.js')
@@ -154,6 +154,7 @@ app.on('window-all-closed', () => {
 
 ipcMain.handle('listFolder',async (event,directory) => {
   result = fs.readdirSync(directory, { withFileTypes: true });
+  console.log(result,"listfolder");
   return result;
 });
 
@@ -164,6 +165,7 @@ ipcMain.handle('openDialog', async () => {
 
   if (!result.canceled) {
     const folderPath = result.filePaths[0];
+    console.log(folderPath);
     const folderContents = fs.readdirSync(folderPath, { withFileTypes: true })
     .filter(item => item.isDirectory());
     const config = {
@@ -219,6 +221,28 @@ ipcMain.handle('uploadFile', (event,{fileName, sourcePath, destinationPath }) =>
         return true;
     }
 });
+});
+ipcMain.handle('addFolder', async (event,folderName) => {
+  new_path = path.join(folderName,"新建类别");
+  fs.mkdirSync(new_path)
+
+  console.log('Folder created successfully');
+  result = fs.readdirSync(folderName, { withFileTypes: true })
+  .filter(item => item.isDirectory());
+  // console.log(folderContents,folderName);
+  console.log(result,"addfolder");
+  return result;
+});
+
+ipcMain.handle('renameFolder', async (event,{src,des}) => {
+  state = fs.renameSync(src, des)
+  console.log(state);
+  console.log('Folder rename successfully');
+  result = fs.readdirSync(path.dirname(src) , { withFileTypes: true })
+  .filter(item => item.isDirectory());
+  // console.log(folderContents,folderName);
+  console.log(result,"renamefolder");
+  return result;
 });
 // ipcMain.handle('listFolder',async (event,folderPath) => {
 //   const folderContents = fs.readdirSync(folderPath, { withFileTypes: true })

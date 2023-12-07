@@ -25,4 +25,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // console.log(sourcePath, destinationPath,"preload");
     return ipcRenderer.invoke('uploadFile', { fileName,sourcePath, destinationPath });
   },
+  addFolder:(folderName) => {
+    return ipcRenderer.invoke('addFolder', folderName);
+  },
+  renameFolder:(src,des) => {
+    return ipcRenderer.invoke('renameFolder', {src,des});
+  },
 }); 
