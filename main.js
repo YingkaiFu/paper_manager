@@ -244,9 +244,17 @@ ipcMain.handle('renameFolder', async (event,{src,des}) => {
   console.log(result,"renamefolder");
   return result;
 });
-// ipcMain.handle('listFolder',async (event,folderPath) => {
-//   const folderContents = fs.readdirSync(folderPath, { withFileTypes: true })
-//   .filter(item => item.isDirectory());
-//   console.log(folderContents);
-//   return folderContents;
-// });
+
+ipcMain.handle('read_arxiv', async (event, directory) => {
+  return await new Promise((resolve, reject) => {
+    execFile('python', ['src\\utils\\read_pdfs.py', directory], (error, stdout, stderr) => {
+      if (error) {
+        console.log(error)
+        reject(error);
+      } else {
+        console.log(stdout)
+        resolve(JSON.parse(stdout));
+      }
+    });
+  });
+});

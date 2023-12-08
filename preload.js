@@ -31,4 +31,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   renameFolder:(src,des) => {
     return ipcRenderer.invoke('renameFolder', {src,des});
   },
+  readArxiv: async (directory) => {
+    console.log(directory)
+    const result = await ipcRenderer.invoke('read_arxiv', directory);
+    return result;
+  },
 }); 

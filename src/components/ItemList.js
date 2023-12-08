@@ -1,8 +1,8 @@
-import React from 'react';
+import React,{ useState } from 'react';
 import { Space, Table, Tag,Pagination } from 'antd';
 
 
-const createColumns = (deleteFile) => [
+const createColumns = (deleteFile,getInfo) => [
   {
     title: 'Item',
     dataIndex: 'name',
@@ -14,8 +14,8 @@ const createColumns = (deleteFile) => [
   Table.EXPAND_COLUMN,
   {
     title: 'Author',
-    dataIndex: 'path',
-    key: 'path',
+    dataIndex: 'author',
+    key: 'author',
     defaultSortOrder: 'descend',
   },
   {
@@ -25,6 +25,10 @@ const createColumns = (deleteFile) => [
       <Space size="middle">
         <a onClick={() => {
           // console.log(record.key)
+          getInfo(record.key)
+        }}>Update </a>
+        <a onClick={() => {
+          // console.log(record.key)
           deleteFile(record.key)
         }}>Delete </a>
       </Space>
@@ -32,18 +36,17 @@ const createColumns = (deleteFile) => [
   },
 ];
 
-const onChange = (pagination, filters, sorter, extra) => {
-  console.log('params', pagination, filters, sorter, extra);
-};
-const ItemList = ({ items, openFile, deleteFile }) => {
+// const onChange = (pagination, filters, sorter, extra) => {
+//   console.log('params', pagination, filters, sorter, extra);
+// };
+const ItemList = ({ items, openFile, deleteFile,getInfo }) => {
   // console.log(items)
   const results = items.map(file => ({
     ...file,
     key: file.path + "\\" + file.name,
   }));
-  // console.log(results)
   // console.log(items)
-  const columns = createColumns(deleteFile);
+  const columns = createColumns(deleteFile,getInfo);
   return (
     <Table
       onRow={(record) => {
@@ -68,7 +71,7 @@ const ItemList = ({ items, openFile, deleteFile }) => {
         pageSize:5,
         defaultCurrent:1}
       }
-      onChange={onChange}
+      // onChange={onChange}
       expandable={{
       expandedRowRender: (record) => <p style={{ margin: 0 }}>{record.path}</p>,
       }}

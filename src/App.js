@@ -123,6 +123,21 @@ function App() {
     showFolder(activeFolder);
   }
   
+  async function getInfo(file) {
+    const fileIndex = files.findIndex((item) => (item.path+'\\'+item.name)  === file);
+    const result = await window.electronAPI.readArxiv(file);
+    const updatedFiles = [...files];
+
+    // 更新特定索引的元素
+    updatedFiles[fileIndex] = {
+      ...updatedFiles[fileIndex],
+      author: result.authors
+    };
+  
+    // 使用新数组更新状态
+    setFiles(updatedFiles);
+  }
+
   useEffect(() => {
     async function initFolder() {
       const result = await window.electronAPI.initFolder();
@@ -212,6 +227,7 @@ function App() {
                 items={files}
                 openFile={openFile}
                 deleteFile={deleteFile}
+                getInfo={getInfo}
               // activeFolder={activeFolder}
               />
             }
