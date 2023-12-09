@@ -129,7 +129,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     // resizable: false, // 禁止调整窗口大小
-
+    icon: path.join(__dirname, 'assets','icons','logo.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js')
     }
