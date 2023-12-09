@@ -43,32 +43,7 @@ const category_button = {
   margin: '5px 0px',
 
 };
-// const props = {
-//   name: 'file',
-//   multiple: true,
-//   // action: 'https://run.mocky.io/v3/435e224c-44fb-4773-9faf-380c5e6a2188',
-//   customRequest: ({ file, onSuccess }) => {
-//     const result = window.electronAPI.uploadFile(file);
-//     console.log(file);
-//     setTimeout(() => {
-//       onSuccess("ok");
-//     }, 0);
-//   },
-//   onChange(info) {
-//     const { status } = info.file;
-//     if (status !== 'uploading') {
-//       console.log(info.file, info.fileList);
-//     }
-//     if (status === 'done') {
-//       message.success(`${info.file.name} file uploaded successfully.`);
-//     } else if (status === 'error') {
-//       message.error(`${info.file.name} file upload failed.`);
-//     }
-//   },
-//   onDrop(e) {
-//     console.log('Dropped files', e.dataTransfer.files);
-//   },
-// };
+
 const onSearch = (value, _e, info) => console.log(info?.source, value);
 
 
@@ -143,12 +118,12 @@ function App() {
     setIsLoading(true); // 开始加载时设置为 true
 
     try {
-        const result = await window.electronAPI.readPdf(file);
-        setUpdatedFile(result);
+      const result = await window.electronAPI.readPdf(file);
+      setUpdatedFile(result);
     } catch (error) {
-        console.error('Error fetching data:', error);
+      console.error('Error fetching data:', error);
     } finally {
-        setIsLoading(false); // 加载完成或发生错误时设置为 false
+      setIsLoading(false); // 加载完成或发生错误时设置为 false
     }
   }
 
@@ -161,13 +136,9 @@ function App() {
       setRootFolder(folderPath);
     };
     initFolder();
-    //   // 调用异步函数
-    //   fetchFiles();
+
   }, []); // 空数组表示只在组件挂载时调用一次
 
-  // // 根据加载状态渲染不同的内容
-  // if (loading) {
-  //   return 
 
   return (
     <div className="App ">
@@ -190,12 +161,6 @@ function App() {
                 增加类别
               </Button>
             </Flex>
-            {/* <div>
-              <DragAndDropArea />
-            </div> */}
-            {/* <Button type="primary" style={buttonStyle} block>
-          Primary
-        </Button> */}
           </Flex>
         </Sider>
         <Layout>

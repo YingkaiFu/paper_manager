@@ -1,12 +1,12 @@
-import React,{ useState } from 'react';
-import { Space, Table, Tag,Pagination,Tooltip,Drawer,Popconfirm } from 'antd';
+import React, { useState } from 'react';
+import { Space, Table, Tag, Pagination, Tooltip, Drawer, Popconfirm } from 'antd';
 import {
   DeleteOutlined,
   CloudUploadOutlined,
 } from '@ant-design/icons';
 
 
-const createColumns = (deleteFile,getInfo) => [
+const createColumns = (deleteFile, getInfo) => [
   {
     title: 'Name',
     dataIndex: 'name',
@@ -52,12 +52,12 @@ const createColumns = (deleteFile,getInfo) => [
     render: (_, record) => (
       <Space size="middle">
         <Tooltip placement="top" title="更新">
-        <CloudUploadOutlined onClick={() => {
-          console.log(record,'record');
-          getInfo(record.key)
-        }}/>
+          <CloudUploadOutlined onClick={() => {
+            console.log(record, 'record');
+            getInfo(record.key)
+          }} />
         </Tooltip>
-          <Tooltip placement="top" title="删除">
+        <Tooltip placement="top" title="删除">
           <Popconfirm
             title="Delete the task"
             description="Are you sure to delete this task?"
@@ -67,26 +67,23 @@ const createColumns = (deleteFile,getInfo) => [
           >
             <DeleteOutlined />
           </Popconfirm>
-                  
+
         </Tooltip>
       </Space>
     ),
   },
 ];
 
-// const onChange = (pagination, filters, sorter, extra) => {
-//   console.log('params', pagination, filters, sorter, extra);
-// };
-const ItemList = ({ items, openFile, deleteFile,getInfo }) => {
 
-  
-  // console.log(items)
+const ItemList = ({ items, openFile, deleteFile, getInfo }) => {
+
+
   const results = items.map(file => ({
     ...file,
     key: file.path + "\\" + file.name,
   }));
   // console.log(results)
-  const columns = createColumns(deleteFile,getInfo);
+  const columns = createColumns(deleteFile, getInfo);
   return (
     <Table
       onRow={(record) => {
@@ -106,20 +103,22 @@ const ItemList = ({ items, openFile, deleteFile,getInfo }) => {
       dataSource={results}
       bordered
       pagination={
-        {total:items.length,
-        showTotal:(total) => `Total ${total} items`,
-        defaultPageSize:30,
-        pageSize:7,
-        defaultCurrent:1}
+        {
+          total: items.length,
+          showTotal: (total) => `Total ${total} items`,
+          defaultPageSize: 30,
+          pageSize: 7,
+          defaultCurrent: 1
+        }
       }
       scroll={{
         y: 500,
       }}
       // onChange={onChange}
       expandable={{
-      expandedRowRender: (record) => <p style={{ margin: 0 }}>{record.summary}</p>,
+        expandedRowRender: (record) => <p style={{ margin: 0 }}>{record.summary}</p>,
       }}
-      
+
     />
   )
 }
