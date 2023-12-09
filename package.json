@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "main": "main.js",
+  "author": {
+    "name": "Yingkai Fu",
+    "email": "Yingkai.Fu@outlook.com"
+  },
+  "description": "A paper manager for researchers",
   "dependencies": {
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
@@ -11,18 +16,28 @@
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron-is-dev": "^2.0.0",
+    "electron-squirrel-startup": "^1.0.0",
+    "nedb": "^1.8.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^2.0.943",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
     "wait-on": "^7.2.0",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "xml2js": "^0.6.2"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "dev": "concurrently \"cross-env BROWSER=none npm start\" \"wait-on http://localhost:3000 && electron .\""
+    "dev": "concurrently \"cross-env BROWSER=none npm start\" \"wait-on http://localhost:3000 && electron .\"",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "electron-start": "electron-forge start",
+    "electron-package": "electron-forge package",
+    "electron-make": "electron-forge make"
   },
   "eslintConfig": {
     "extends": [
@@ -43,6 +58,12 @@
     ]
   },
   "devDependencies": {
+    "@electron-forge/cli": "^7.2.0",
+    "@electron-forge/maker-deb": "^7.2.0",
+    "@electron-forge/maker-rpm": "^7.2.0",
+    "@electron-forge/maker-squirrel": "^7.2.0",
+    "@electron-forge/maker-zip": "^7.2.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.2.0",
     "electron": "^27.1.3"
   }
 }

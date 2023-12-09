@@ -1,5 +1,5 @@
 import React ,{ useState } from 'react';
-import { Layout, Menu,Input} from 'antd';
+import { Space,Layout, Menu,Input,Row, Col} from 'antd';
 import {EditOutlined} from '@ant-design/icons';
 
 function renameFolderPath(originalPath, newName) {
@@ -48,16 +48,20 @@ const Category = ({categorys,clickFoler,onRenameClick}) => {
                     onBlur={() => handleSave(category.path + "\\" + category.name)}
                 />
             ) : (
-                <span>
-                    {category.name}
-                    <EditOutlined
-                        style={{ marginLeft: 10 }}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleEdit(category);
-                        }}
-                    />
-                </span>
+            <Row justify="space-between" align="middle">
+              <Col>
+                {category.name}
+              </Col>
+              <Col>
+                <EditOutlined
+                  style={{ marginLeft: 10 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEdit(category);
+                  }}
+                />
+              </Col>
+            </Row>
               )
             }),
           )}

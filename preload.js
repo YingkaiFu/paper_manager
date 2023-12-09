@@ -36,4 +36,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const result = await ipcRenderer.invoke('read_arxiv', directory);
     return result;
   },
+  readPdf: async (directory) => {
+    const result = await ipcRenderer.invoke('readpdf', directory);
+    return result;
+  },
 }); 
