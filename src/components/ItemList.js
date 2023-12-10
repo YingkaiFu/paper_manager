@@ -3,17 +3,18 @@ import { Space, Table, Tag, Pagination, Tooltip, Drawer, Popconfirm } from 'antd
 import {
   DeleteOutlined,
   CloudUploadOutlined,
+  FolderOpenOutlined,
 } from '@ant-design/icons';
 
 
-const createColumns = (deleteFile, getInfo) => [
+const createColumns = (openFile, deleteFile, getInfo, openFileDirectory) => [
   {
     title: 'Name',
-    dataIndex: 'name',
-    key: 'name',
-    render: (text) => <a>{text}</a>,
+    dataIndex: 'title',
+    key: 'title',
+    render: (_, record) => <a onClick={() => { openFile(record) }}>{record.title}</a>,
     defaultSortOrder: 'descend',
-    sorter: (a, b) => a.name.localeCompare(b.name),
+    sorter: (a, b) => a.title.localeCompare(b.title),
     width: 400,
   },
   {
@@ -53,21 +54,24 @@ const createColumns = (deleteFile, getInfo) => [
       <Space size="middle">
         <Tooltip placement="top" title="更新">
           <CloudUploadOutlined onClick={() => {
-            console.log(record, 'record');
-            getInfo(record.key)
+            getInfo(record);
           }} />
         </Tooltip>
         <Tooltip placement="top" title="删除">
           <Popconfirm
             title="Delete the task"
             description="Are you sure to delete this task?"
-            onConfirm={() => deleteFile(record.key)}
+            onConfirm={() => deleteFile(record)}
             okText="Yes"
             cancelText="No"
           >
             <DeleteOutlined />
           </Popconfirm>
-
+        </Tooltip>
+        <Tooltip placement="top" title="打开文件夹">
+          <FolderOpenOutlined onClick={() => {
+            openFileDirectory(record);
+          }} />
         </Tooltip>
       </Space>
     ),
@@ -75,32 +79,14 @@ const createColumns = (deleteFile, getInfo) => [
 ];
 
 
-const ItemList = ({ items, openFile, deleteFile, getInfo }) => {
+const ItemList = ({ items, openFile, deleteFile, getInfo, openFileDirectory }) => {
 
-
-  const results = items.map(file => ({
-    ...file,
-    key: file.path + "\\" + file.name,
-  }));
-  // console.log(results)
-  const columns = createColumns(deleteFile, getInfo);
+  const columns = createColumns(openFile, deleteFile, getInfo, openFileDirectory);
   return (
     <Table
-      onRow={(record) => {
-        return {
-          onClick: (event) => {
-            if (event.target.innerText && event.target.innerText.endsWith('.pdf')) {
-              openFile(event.target.innerText);
-            }
-          }, // 点击行
-          onDoubleClick: (event) => { },
-          onContextMenu: (event) => { },
-          onMouseEnter: (event) => { }, // 鼠标移入行
-          onMouseLeave: (event) => { },
-        };
-      }}
+
       columns={columns}
-      dataSource={results}
+      dataSource={items}
       bordered
       pagination={
         {

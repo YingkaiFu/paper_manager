@@ -1,6 +1,6 @@
 import './App.css';
 import React, { useState, useEffect } from 'react'
-import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal } from 'antd'
+import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography } from 'antd'
 import { InboxOutlined } from '@ant-design/icons';
 import Initstate from './utils/Initstate.js'
 import Category from './components/Category.js'
@@ -9,6 +9,8 @@ import DragAndDropArea from './components/Drag.js'
 const { Header, Footer, Sider, Content } = Layout
 const { Dragger } = Upload;
 const { Search } = Input;
+const { TextArea } = Input;
+const { Text, Link } = Typography;
 
 const headerStyle = {
   textAlign: 'center',
@@ -46,6 +48,47 @@ const category_button = {
 
 const onSearch = (value, _e, info) => console.log(info?.source, value);
 
+const properties = [
+  { key: 'title', label: 'Title', component: TextArea },
+  { key: 'authors', label: 'Authors', component: TextArea },
+  { key: 'year', label: 'Year', component: Input },
+  { key: 'journal', label: 'Journal', component: Input },
+];
+
+const MyComponent = ({ currentFile, updatedFile }) => {
+  const renderRow = (key, label, Component) => (
+    <Row>
+      <Col span={4}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          {label}
+        </Typography.Title>
+      </Col>
+      <Col span={10}>
+        <Component value={currentFile?.[key] || ''} autoSize={{ minRows: 2, maxRows: 5 }} />
+      </Col>
+      <Col span={10}>
+        <Component value={updatedFile?.[key] || ''} autoSize={{ minRows: 2, maxRows: 5 }} />
+      </Col>
+    </Row>
+  );
+
+  return (
+    <div>
+      <Row>
+        <Col span={4}>
+          <Typography.Title level={4} style={{ margin: 0 }}>Properties</Typography.Title>
+        </Col>
+        <Col span={10}>
+          <Typography.Title level={4} style={{ margin: 0, textAlign: 'center' }}>Original</Typography.Title>
+        </Col>
+        <Col span={10}>
+          <Typography.Title level={4} style={{ margin: 0, textAlign: 'center' }}>Updated File</Typography.Title>
+        </Col>
+      </Row>
+      {properties.map(prop => renderRow(prop.key, prop.label, prop.component))}
+    </div>
+  );
+};
 
 function App() {
 
@@ -71,8 +114,6 @@ function App() {
 
   async function showFolder(folder) {
     const result = await window.electronAPI.listFolder(folder);
-    // const folderContents = result.folderContents;
-    console.log(result);
     setFiles(result);
     setActivedFoler(folder);
   };
@@ -89,10 +130,15 @@ function App() {
     setFolder(result)
   };
   async function openFile(file) {
-    const result = await window.electronAPI.openFile(activeFolder + "\\" + file);
+    const result = await window.electronAPI.openFile(file.key);
+  };
+
+  async function openFileDirectory(file) {
+    window.electronAPI.openFileDirectory(file.key);
+    // const result = await window.electronAPI.openFileDirectory(file.key);
   };
   async function deleteFile(file) {
-    const result = await window.electronAPI.deleteFile(file);
+    const result = await window.electronAPI.deleteFile(file.key);
     showFolder(activeFolder);
   }
 
@@ -100,25 +146,37 @@ function App() {
   const handleOk = () => {
     // 更新 files 状态
     const updatedFiles = [...files];
-    const fileIndex = files.findIndex((item) => (item.path + '\\' + item.name) === currentFile);
+    const fileIndex = files.findIndex((item) => item.path === currentFile.path);
     updatedFiles[fileIndex] = { ...updatedFiles[fileIndex], ...updatedFile };
-    console.log(files, currentFile);
-    console.log(updatedFiles);
     setFiles(updatedFiles);
     setIsModalVisible(false);
   };
+  const handleReset = () => {
+    // 更新 files 状态
+    const updatedFiles = [...files];
 
+    const fileIndex = files.findIndex((item) => item.path === currentFile.path);
+    const default_file = {
+      title: currentFile.filename,
+      authors: '',
+      year: '',
+      journal: '',
+    }
+    updatedFiles[fileIndex] = { ...updatedFiles[fileIndex], ...default_file };
+    setFiles(updatedFiles);
+    setIsModalVisible(false);
+  };
   const handleCancel = () => {
 
     setIsModalVisible(false);
   };
   async function getInfo(file) {
     setCurrentFile(file);
+    setUpdatedFile(null)
     setIsModalVisible(true);
     setIsLoading(true); // 开始加载时设置为 true
-
     try {
-      const result = await window.electronAPI.readPdf(file);
+      const result = await window.electronAPI.readPdf(file.path);
       setUpdatedFile(result);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -126,7 +184,9 @@ function App() {
       setIsLoading(false); // 加载完成或发生错误时设置为 false
     }
   }
-
+  // const handleChange = (e) => {
+  //   setMyValue(e.target.value);
+  // };
   useEffect(() => {
     async function initFolder() {
       const result = await window.electronAPI.initFolder();
@@ -155,7 +215,7 @@ function App() {
             />
             <Flex vertical style={{ width: '100%', bottom: 0, position: "absolute", }}>
               <Button type="primary" style={category_button} block onClick={opendilog} >
-                导入文献
+                打开文件夹
               </Button>
               <Button type="primary" style={category_button} block onClick={addfoler}>
                 增加类别
@@ -207,6 +267,7 @@ function App() {
                 openFile={openFile}
                 deleteFile={deleteFile}
                 getInfo={getInfo}
+                openFileDirectory={openFileDirectory}
               // activeFolder={activeFolder}
               />
             }
@@ -214,23 +275,26 @@ function App() {
               title="Update File Information"
               open={isModalVisible}
               onOk={handleOk}
+              width={900}
               onCancel={() => handleCancel(false)}
               confirmLoading={isLoading}
+              footer={[
+                <Button key="back" onClick={handleCancel}>
+                  Cancel
+                </Button>,
+                <Button key="Reset" type="primary" danger onClick={handleReset}>
+                  Reset
+                </Button>,
+                <Button key="Comfirm" type="primary" loading={isLoading} onClick={handleOk}>
+                  Update
+                </Button>,
+              ]}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <div>
-                  <h3>Original File</h3>
-                  {/* 在这里渲染 currentFile 的内容 */}
-                  <p>{currentFile?.name}</p>
-                  {/* 其他信息 */}
-                </div>
-                <div>
-                  <h3>Updated File</h3>
-                  {/* 在这里渲染 updatedFile 的内容 */}
-                  <p>{updatedFile?.name}</p>
-                  {/* 其他信息 */}
-                </div>
-              </div>
+              <MyComponent
+                currentFile={currentFile}
+                updatedFile={updatedFile}
+              >
+              </MyComponent>
             </Modal>
           </Content>
         </Layout>

@@ -9,8 +9,14 @@ const axios = require('axios');
 const xml2js = require('xml2js');
 const { PDFDocument } = require('pdf-lib');
 const Datastore = require('nedb');
+const isMac = process.platform === 'darwin';
 
-const isMac = process.platform === 'darwin'
+
+function isArxivFileName(fileName) {
+  // arXiv 文件名格式，可能包含版本号，如 "2104.00001v1"
+  const arxivRegex = /^\d{4}\.\d{4,5}(v\d+)?$/;
+  return arxivRegex.test(fileName);
+}
 
 const template = [
   // { role: 'appMenu' }
@@ -129,7 +135,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     // resizable: false, // 禁止调整窗口大小
-    icon: path.join(__dirname, 'assets','icons','logo.png'),
+    icon: path.join(__dirname, 'assets', 'icons', 'logo.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js')
     }
@@ -168,21 +174,23 @@ ipcMain.handle('listFolder', async (event, directory) => {
     .filter(dirent => dirent.isFile() && path.extname(dirent.name).toLowerCase() === '.pdf')
     .map(dirent => {
       return new Promise((resolve, reject) => {
-        console.log(dirent.path, dirent.name)
         db.findOne({ path: path.join(dirent.path, dirent.name) }, (err, doc) => {
           if (err) {
             reject(err);
           } else {
+            const ext = path.extname(dirent.name);
+            // 去除扩展名，得到文件名
+            const fileNameWithoutExt = dirent.name.replace(ext, '');
             const fileData = {
               ...dirent, // 文件的基本信息
               year: '',  // 添加 year 键，值为默认的空字符串
               authors: '', // 添加 author 键，值为默认的空字符串
               summary: '', // 添加 summary 键，值为默认的空字符串
               journal: '', // 添加 journal 键，值为默认的空字符串
-              title: '', // 添加 title 键，值为默认的空字符串
+              title: fileNameWithoutExt, // 添加 title 键，值为默认的空字符串
+              path: path.join(dirent.path, dirent.name), // 添加 path 键，值为文件的完整路径
               ...doc || {} // 数据库查询结果
             };
-            console.log(fileData, "fileData");
             resolve(fileData);
           }
         });
@@ -191,7 +199,6 @@ ipcMain.handle('listFolder', async (event, directory) => {
 
   try {
     const filesWithDbInfo = await Promise.all(fileDataPromises);
-    console.log(filesWithDbInfo, "filesWithDbInfo");
     return filesWithDbInfo;
   } catch (error) {
     console.error('Error reading from database:', error);
@@ -207,7 +214,6 @@ ipcMain.handle('openDialog', async () => {
 
   if (!result.canceled) {
     const folderPath = result.filePaths[0];
-    console.log(folderPath);
     const folderContents = fs.readdirSync(folderPath, { withFileTypes: true })
       .filter(item => item.isDirectory());
     const config = {
@@ -272,7 +278,6 @@ ipcMain.handle('addFolder', async (event, folderName) => {
   console.log('Folder created successfully');
   result = fs.readdirSync(folderName, { withFileTypes: true })
     .filter(item => item.isDirectory());
-  // console.log(folderContents,folderName);
   return result;
 });
 
@@ -281,80 +286,80 @@ ipcMain.handle('renameFolder', async (event, { src, des }) => {
   console.log('Folder rename successfully');
   result = fs.readdirSync(path.dirname(src), { withFileTypes: true })
     .filter(item => item.isDirectory());
-  // console.log(folderContents,folderName);
   return result;
 });
 
-// ipcMain.handle('read_arxiv', async (event, directory) => {
-//   return await new Promise((resolve, reject) => {
-//     execFile('python', ['src\\utils\\read_pdfs.py', directory], (error, stdout, stderr) => {
-//       if (error) {
-//         console.log(error)
-//         reject(error);
-//       } else {
-//         console.log(stdout)
-//         resolve(JSON.parse(stdout));
-//       }
-//     });
-//   });
-// });
+ipcMain.handle('openFileDirectory', async (event, directory) => {
+  shell.showItemInFolder(directory);
+});
+
 ipcMain.handle('readpdf', async (event, directory) => {
   fileNameWithExt = path.basename(directory)
   const ext = path.extname(directory);
-
   // 去除扩展名，得到文件名
   const fileNameWithoutExt = fileNameWithExt.replace(ext, '');
   try {
-    const link = 'http://export.arxiv.org/api/query?search_query=' + fileNameWithoutExt
-    const response = await axios.get(link);
-    const data = response.data;
-    // 使用 xml2js 解析 XML 数据
-    const parser = new xml2js.Parser();
-    const result = await parser.parseStringPromise(data);
-
-    // 提取信息
-    const entry = result.feed.entry[0];
-    const published = entry.published[0];
-
-    // 转换日期格式
-    const publishedDate = new Date(published);
-    const formattedDate = `${publishedDate.getFullYear()}-${String(publishedDate.getMonth() + 1).padStart(2, '0')}`;
-    const title = entry.title[0];
-    var authors = entry.author.map(author => author.name[0]);
-    authors = authors.join(', ');
-    const summary = entry.summary[0];
-
-    // const existingPdfBytes = fs.readFileSync(directory);
-    // const pdfDoc = await PDFDocument.load(existingPdfBytes);
-    // pdfDoc.setAuthor(authors);
-    // pdfDoc.setTitle(title);
-    // const pdfBytes = await pdfDoc.save();
-    // fs.writeFileSync(directory, pdfBytes);
-    const file = {
-      path: directory,
-      name: fileNameWithExt,
-      key: directory,
-      filename: fileNameWithoutExt,
-      title: title,
-      authors: authors,
-      summary: summary,
-      year: formattedDate,
-      journal: 'arXiv',
-    }; // 返回解析后的信息
-    db.update({ _id: file.path }, file, { upsert: true }, (err) => {
-      if (err) {
-        console.log('Error updating file in DB:', err);
-      }
-    });
-    db.find({}, (err, files) => {
-      if (err) {
-        console.log('Error loading files from DB:', err);
-        callback([]);
-        return;
-      }
-      console.log(files, "file_saved");
-    });
-    return file;
+    if (isArxivFileName(fileNameWithoutExt)) {
+      const link = 'http://export.arxiv.org/api/query?search_query=' + fileNameWithoutExt
+      const response = await axios.get(link);
+      const data = response.data;
+      // 使用 xml2js 解析 XML 数据
+      const parser = new xml2js.Parser();
+      const result = await parser.parseStringPromise(data);
+      const entry = result.feed.entry[0];
+      const published = entry.published[0];
+      // 转换日期格式
+      const publishedDate = new Date(published);
+      const formattedDate = `${publishedDate.getFullYear()}-${String(publishedDate.getMonth() + 1).padStart(2, '0')}`;
+      const title = entry.title[0];
+      var authors = entry.author.map(author => author.name[0]);
+      authors = authors.join(', ');
+      const summary = entry.summary[0];
+      const file = {
+        path: directory,
+        name: fileNameWithExt,
+        key: directory,
+        filename: fileNameWithoutExt,
+        title: title.replace(/\n/g, ''),
+        authors: authors,
+        summary: summary.replace(/\n/g, ''),
+        year: formattedDate,
+        journal: 'arXiv',
+      }; // 返回解析后的信息
+      db.update({ _id: file.path }, file, { upsert: true }, (err) => {
+        if (err) {
+          console.log('Error updating file in DB:', err);
+        }
+      });
+      return file;
+    }
+    else {
+      const link = 'https://api.crossref.org/works?query=' + fileNameWithoutExt
+      const response = await axios.get(link);
+      const data = response.data.message.items[0]
+      const title = data.title[0]; // 提取标题
+      const author_list = data.author.map(author => {
+        return author.given + " " + author.family;
+      });
+      const authors = author_list.join(", "); // 提取作者
+      const file = {
+        path: directory,
+        name: fileNameWithExt,
+        key: directory,
+        filename: fileNameWithoutExt,
+        title: title.replace(/\n/g, ''),
+        authors: authors,
+        summary: '',
+        year: '',
+        journal: 'crossref',
+      };
+      db.update({ _id: file.path }, file, { upsert: true }, (err) => {
+        if (err) {
+          console.log('Error updating file in DB:', err);
+        }
+      });
+      return file;
+    }
   } catch (error) {
     console.error('Error fetching data from arXiv:', error);
     return null;

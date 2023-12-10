@@ -40,4 +40,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const result = await ipcRenderer.invoke('readpdf', directory);
     return result;
   },
+  openFileDirectory : async(directory) => {
+    const result = await ipcRenderer.invoke('openFileDirectory', directory);
+    return result;
+  },
 }); 
