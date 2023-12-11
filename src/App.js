@@ -94,7 +94,7 @@ function App() {
 
   const [Folder, setFolder] = useState([]);
   const [rootFolder, setRootFolder] = useState("");
-  const [activeFolder, setActivedFoler] = useState("");
+  const [activeFolder, setActivedFoler] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [currentFile, setCurrentFile] = useState(null);
   const [updatedFile, setUpdatedFile] = useState(null);
@@ -115,14 +115,14 @@ function App() {
   async function showFolder(folder) {
     const result = await window.electronAPI.listFolder(folder);
     setFiles(result);
-    setActivedFoler(folder);
+    setActivedFoler([folder]);
   };
 
   async function onRenameClick(src, des) {
     // 更新类别的名字
     const result = await window.electronAPI.renameFolder(src, des);
-    setFolder(result)
-    setActivedFoler(des);
+    setFolder(result);
+    setActivedFoler([des]);
   }
   async function addfoler() {
     const result = await window.electronAPI.addFolder(rootFolder);
@@ -139,7 +139,7 @@ function App() {
   };
   async function deleteFile(file) {
     const result = await window.electronAPI.deleteFile(file.key);
-    showFolder(activeFolder);
+    showFolder(activeFolder[0]);
   }
 
 
@@ -190,8 +190,18 @@ function App() {
   useEffect(() => {
     async function initFolder() {
       const result = await window.electronAPI.initFolder();
+      console.log(result, 'ddd');
+      if (!result) {
+        return;
+      }
       const folderPath = result.folderPath;
       const folderContents = result.folderContents;
+      const folder = result.lastfolder;
+      if (folder) {
+        const folers = await window.electronAPI.listFolder(folder);
+        setFiles(folers);
+        setActivedFoler([folers]);
+      }
       setFolder(folderContents);
       setRootFolder(folderPath);
     };
@@ -207,12 +217,14 @@ function App() {
 
           <Flex vertical gap="small" style={{ width: '100%' }}>
             <Search placeholder="input search text" onSearch={onSearch} enterButton />
-
-            <Category
-              categorys={Folder}
-              clickFoler={(id) => { showFolder(id.key); }}
-              onRenameClick={(src, des) => { onRenameClick(src, des) }}
-            />
+            {Folder && Folder.length > 0 && (
+              <Category
+                categorys={Folder}
+                clickFoler={(id) => { showFolder(id.key); }}
+                onRenameClick={(src, des) => { onRenameClick(src, des) }}
+                activeFolder={activeFolder}
+              />
+            )}
             <Flex vertical style={{ width: '100%', bottom: 0, position: "absolute", }}>
               <Button type="primary" style={category_button} block onClick={opendilog} >
                 打开文件夹
@@ -229,7 +241,7 @@ function App() {
               name='file'
               multiple={true}
               customRequest={({ file, onSuccess }) => {
-                const result = window.electronAPI.uploadFile(file.name, file.path, activeFolder);
+                const result = window.electronAPI.uploadFile(file.name, file.path, activeFolder[0]);
                 console.log(file);
                 setTimeout(() => {
                   onSuccess("ok");
@@ -241,7 +253,7 @@ function App() {
                   console.log(info.file, info.fileList);
                 }
                 if (status === 'done') {
-                  showFolder(activeFolder)
+                  showFolder(activeFolder[0])
                   message.success(`${info.file.name} file uploaded successfully.`);
                 } else if (status === 'error') {
                   message.error(`${info.file.name} file upload failed.`);

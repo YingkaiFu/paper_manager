@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
-const { writeFile, readFileSync } = require('fs');
+const { writeFile, readFileSync, existsSync } = require('fs');
 const { execFile } = require('child_process');
 const isDev = require('electron-is-dev');
 const { remote } = require('electron');
@@ -196,7 +196,7 @@ ipcMain.handle('listFolder', async (event, directory) => {
         });
       });
     });
-
+  db.update({ _id: 'folderData' }, { $set: { lastfolder: directory } }, { upsert: true });
   try {
     const filesWithDbInfo = await Promise.all(fileDataPromises);
     return filesWithDbInfo;
@@ -218,26 +218,26 @@ ipcMain.handle('openDialog', async () => {
       .filter(item => item.isDirectory());
     const config = {
       folderPath: folderPath,
-      folderContents: folderContents
+      folderContents: folderContents,
+      lastfolder: "",
     };
-    let status = null;
-    writeFile(savePath, JSON.stringify(config, null, 2), (err) => {
-      if (err) {
-        status = -1;
-      } else {
-        status = 0;
-      }
-    });
+    db.update({ _id: 'folderData' }, { $set: config }, { upsert: true });
     return config;
   }
   return null;
 });
 
 ipcMain.handle('initFolder', async () => {
-  const data = readFileSync(savePath);
-  if (data) {
-    return JSON.parse(data);
-  }
+  return new Promise((resolve, reject) => {
+    db.findOne({ _id: 'folderData' }, (err, doc) => {
+      if (err) {
+        console.error('Error fetching data:', err);
+        reject(err);
+      } else {
+        resolve(doc);
+      }
+    });
+  });
 });
 
 ipcMain.handle('openFile', async (event, filePath) => {
@@ -286,6 +286,8 @@ ipcMain.handle('renameFolder', async (event, { src, des }) => {
   console.log('Folder rename successfully');
   result = fs.readdirSync(path.dirname(src), { withFileTypes: true })
     .filter(item => item.isDirectory());
+  db.update({ _id: 'folderData' }, { $set: { folderContents: result } }, { upsert: true });
+  db.update({ _id: 'folderData' }, { $set: { lastfolder: des } }, { upsert: true });
   return result;
 });
 
