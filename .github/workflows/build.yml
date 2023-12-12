@@ -6,14 +6,14 @@ on:
           - master
 
 jobs:
-    release:
-        name: build and release electron app
-        runs-on: ${{ matrix.os }}
+  release:
+    name: build and release electron app
+    runs-on: ${{ matrix.os }}
         
     strategy:
-        fail-fast: false
-        matrix:
-          os: [windows-latest]
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
             
     steps:
         - name: Check out git repository
