@@ -142,11 +142,14 @@ function createWindow() {
   });
 
   // 加载应用的 index.html
-  const urlLocation = isDev ? 'http://localhost:3000' : "dummyurl";
-  const startFile = process.env.ELECTRON_START_URL || `'build/index.html')}`;
-  console.log(urlLocation);
-  // win.webContents.openDevTools();
-  win.loadURL(urlLocation);
+  const urlLocation = isDev ? 'http://localhost:3000' : "build/index.html";
+  // const startFile = process.env.ELECTRON_START_URL || `'build/index.html')}`;
+  // console.log(urlLocation);
+  if (isDev) {
+    win.webContents.openDevTools();
+  }
+  // win.loadURL(urlLocation);
+  isDev ? win.loadURL(urlLocation):win.loadFile(urlLocation);
   //   win.loadFile('index.html');
 
 }
