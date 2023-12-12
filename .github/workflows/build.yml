@@ -1,5 +1,8 @@
 name: Build
 
+env:
+  CI: false
+  
 on:
     push:
         branches:
