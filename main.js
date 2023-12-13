@@ -186,6 +186,7 @@ ipcMain.handle('listFolder', async (event, directory) => {
             const fileNameWithoutExt = dirent.name.replace(ext, '');
             const fileData = {
               ...dirent, // 文件的基本信息
+              key: path.join(dirent.path, dirent.name),
               year: '',  // 添加 year 键，值为默认的空字符串
               authors: '', // 添加 author 键，值为默认的空字符串
               summary: '', // 添加 summary 键，值为默认的空字符串

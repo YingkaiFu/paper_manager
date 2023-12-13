@@ -11,13 +11,13 @@ function renameFolderPath(originalPath, newName) {
   return originalPath.substring(0, lastBackslashIndex + 1) + newName;
 }
 
-const Category = ({ categorys, clickFoler, onRenameClick, activeFolder }) => {
+const Category = ({ categorys, clickFoler, onRenameClick, activeFolder, }) => {
 
   const [editingKey, setEditingKey] = useState(null);
   const [editingName, setEditingName] = useState('');
 
   const handleEdit = (category) => {
-    const key = category.path + "\\" + category.name
+    const key = category.path + "\\" + category.name;
     setEditingKey(key);
     setEditingName(category.name);
   };
@@ -67,7 +67,7 @@ const Category = ({ categorys, clickFoler, onRenameClick, activeFolder }) => {
         }),
         )}
     />
-  )
-}
+  );
+};
 
 export default Category;

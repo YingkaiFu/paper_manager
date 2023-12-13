@@ -1,12 +1,11 @@
 import './App.css';
-import React, { useState, useEffect } from 'react'
-import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography } from 'antd'
+import React, { useState, useEffect } from 'react';
+import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
-import Initstate from './utils/Initstate.js'
-import Category from './components/Category.js'
-import ItemList from './components/ItemList.js'
-import DragAndDropArea from './components/Drag.js'
-const { Header, Footer, Sider, Content } = Layout
+import Category from './components/Category.js';
+import ItemList from './components/ItemList.js';
+
+const { Header, Footer, Sider, Content } = Layout;
 const { Dragger } = Upload;
 const { Search } = Input;
 const { TextArea } = Input;
@@ -15,9 +14,7 @@ const { Text, Link } = Typography;
 const headerStyle = {
   textAlign: 'center',
   color: '#8c8c8c',
-  height: "100px",
-  // paddingInline: 50,
-  lineHeight: '64px',
+  height: "130px",
   backgroundColor: '#f5f5f5',
 };
 const contentStyle = {
@@ -25,7 +22,6 @@ const contentStyle = {
   minHeight: "200px",
   height: "600px",
   maxHeight: "600px",
-  lineHeight: '60px',
   color: '#8c8c8c',
   backgroundColor: '#fff7e6',
 };
@@ -108,13 +104,13 @@ function App() {
       const folderPath = result.folderPath;
       const folderContents = result.folderContents;
       setRootFolder(folderPath);
-      setFolder(folderContents)
+      setFolder(folderContents);
     }
   };
 
   async function showFolder(folder) {
     const result = await window.electronAPI.listFolder(folder);
-    setFiles(result);
+    setFiles([...result]);
     setActivedFoler([folder]);
   };
 
@@ -127,7 +123,7 @@ function App() {
   async function addfoler() {
     const result = await window.electronAPI.addFolder(rootFolder);
     // const folderContents = result.folderContents;
-    setFolder(result)
+    setFolder(result);
   };
   async function openFile(file) {
     const result = await window.electronAPI.openFile(file.key);
@@ -161,7 +157,7 @@ function App() {
       authors: '',
       year: '',
       journal: '',
-    }
+    };
     updatedFiles[fileIndex] = { ...updatedFiles[fileIndex], ...default_file };
     setFiles(updatedFiles);
     setIsModalVisible(false);
@@ -172,7 +168,7 @@ function App() {
   };
   async function getInfo(file) {
     setCurrentFile(file);
-    setUpdatedFile(null)
+    setUpdatedFile(null);
     setIsModalVisible(true);
     setIsLoading(true); // 开始加载时设置为 true
     try {
@@ -190,7 +186,6 @@ function App() {
   useEffect(() => {
     async function initFolder() {
       const result = await window.electronAPI.initFolder();
-      console.log(result, 'ddd');
       if (!result) {
         return;
       }
@@ -200,7 +195,7 @@ function App() {
       if (folder) {
         const folers = await window.electronAPI.listFolder(folder);
         setFiles(folers);
-        setActivedFoler([folers]);
+        setActivedFoler([folder]);
       }
       setFolder(folderContents);
       setRootFolder(folderPath);
@@ -221,7 +216,7 @@ function App() {
               <Category
                 categorys={Folder}
                 clickFoler={(id) => { showFolder(id.key); }}
-                onRenameClick={(src, des) => { onRenameClick(src, des) }}
+                onRenameClick={(src, des) => { onRenameClick(src, des); }}
                 activeFolder={activeFolder}
               />
             )}
@@ -237,42 +232,44 @@ function App() {
         </Sider>
         <Layout>
           <Header style={headerStyle}>
-            <Dragger
-              name='file'
-              multiple={true}
-              customRequest={({ file, onSuccess }) => {
-                const result = window.electronAPI.uploadFile(file.name, file.path, activeFolder[0]);
-                console.log(file);
-                setTimeout(() => {
-                  onSuccess("ok");
-                }, 0);
-              }}
-              onChange={(info) => {
-                const { status } = info.file;
-                if (status !== 'uploading') {
-                  console.log(info.file, info.fileList);
-                }
-                if (status === 'done') {
-                  showFolder(activeFolder[0])
-                  message.success(`${info.file.name} file uploaded successfully.`);
-                } else if (status === 'error') {
-                  message.error(`${info.file.name} file upload failed.`);
-                }
-              }}
-              onDrop={(e) => {
-                console.log('Dropped files', e.dataTransfer.files);
-              }}
-            >
-              <p className="ant-upload-drag-icon">
-                <InboxOutlined />
-              </p>
-              {/* <p className="ant-upload-text">Upload</p> */}
-            </Dragger>
+            <Row>
+              <Col span={12}><Dragger
+                width="50%"
+                name='file'
+                multiple={true}
+                customRequest={({ file, onSuccess }) => {
+                  const result = window.electronAPI.uploadFile(file.name, file.path, activeFolder[0]);
+                  setTimeout(() => {
+                    onSuccess("ok");
+                  }, 0);
+                }}
+                onChange={(info) => {
+                  const { status } = info.file;
+                  if (status !== 'uploading') {
+                    console.log(info.file, info.fileList);
+                  }
+                  if (status === 'done') {
+                    showFolder(activeFolder[0]);
+                    message.success(`${info.file.name} file uploaded successfully.`);
+                  } else if (status === 'error') {
+                    message.error(`${info.file.name} file upload failed.`);
+                  }
+                }}
+                onDrop={(e) => {
+                  console.log('Dropped files', e.dataTransfer.files);
+                }}
+              >
+                <p className="ant-upload-drag-icon">
+                  <InboxOutlined />
+                </p>
+                {/* <p className="ant-upload-text">Upload</p> */}
+              </Dragger></Col>
+
+
+            </Row>
+
           </Header>
           <Content style={contentStyle}>
-            {/* {
-            loading && <p>Loading...</p>
-          } */}
             {
               <ItemList
                 items={files}
@@ -280,7 +277,6 @@ function App() {
                 deleteFile={deleteFile}
                 getInfo={getInfo}
                 openFileDirectory={openFileDirectory}
-              // activeFolder={activeFolder}
               />
             }
             <Modal

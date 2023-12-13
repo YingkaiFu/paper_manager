@@ -12,10 +12,9 @@ const createColumns = (openFile, deleteFile, getInfo, openFileDirectory) => [
     title: 'Name',
     dataIndex: 'title',
     key: 'title',
-    render: (_, record) => <a onClick={() => { openFile(record) }}>{record.title}</a>,
-    defaultSortOrder: 'descend',
+    render: (_, record) => <a onClick={() => { openFile(record); }}>{record.title}</a>,
     sorter: (a, b) => a.title.localeCompare(b.title),
-    width: 400,
+    width: 380,
   },
   {
     title: 'Journal',
@@ -27,7 +26,7 @@ const createColumns = (openFile, deleteFile, getInfo, openFileDirectory) => [
     title: 'Year',
     dataIndex: 'year',
     key: 'year',
-    defaultSortOrder: 'descend',
+    // defaultSortOrder: 'descend',
     sorter: (a, b) => a.year.localeCompare(b.year),
     width: 90,
   },
@@ -77,14 +76,26 @@ const createColumns = (openFile, deleteFile, getInfo, openFileDirectory) => [
     ),
   },
 ];
-
+const rowSelection = {
+  onChange: (selectedRowKeys, selectedRows) => {
+    console.log(`selectedRowKeys: ${selectedRowKeys}`, 'selectedRows: ', selectedRows);
+  },
+  getCheckboxProps: (record) => ({
+    disabled: record.name === 'Disabled User',
+    // Column configuration not to be checked
+    name: record.name,
+  }),
+};
 
 const ItemList = ({ items, openFile, deleteFile, getInfo, openFileDirectory }) => {
-
+  const [selectionType, setSelectionType] = useState('checkbox');
   const columns = createColumns(openFile, deleteFile, getInfo, openFileDirectory);
   return (
     <Table
-
+    rowSelection={{
+      type: selectionType,
+      ...rowSelection,
+    }}
       columns={columns}
       dataSource={items}
       bordered
@@ -106,7 +117,7 @@ const ItemList = ({ items, openFile, deleteFile, getInfo, openFileDirectory }) =
       }}
 
     />
-  )
-}
+  );
+};
 
 export default ItemList;
