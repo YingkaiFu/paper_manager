@@ -45,10 +45,15 @@ jobs:
           with:
             name: ${{ matrix.os }}
             path: dist/*.exe
-            
+
+        - name: Create Tag
+          run: |
+            TAG="v$(date +'%Y.%m.%d.%H%M%S')"
+
         - name: release
           uses: softprops/action-gh-release@v1
           with:
             files: "dist/*.exe"
+            tag_name: ${{ env.TAG }}
           env:
             GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
