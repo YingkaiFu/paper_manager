@@ -234,10 +234,10 @@ function App() {
             )}
             <Flex vertical style={{ width: '100%', bottom: 0, position: "absolute", }}>
               <Button type="primary" style={category_button} block onClick={opendilog} >
-                打开文件夹
+                Open Folder
               </Button>
               <Button type="primary" style={category_button} block onClick={addfoler}>
-                增加类别
+                Add Category
               </Button>
             </Flex>
           </Flex>

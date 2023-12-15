@@ -51,12 +51,12 @@ const createColumns = (openFile, deleteFile, getInfo, openFileDirectory) => [
     key: 'action',
     render: (_, record) => (
       <Space size="middle">
-        <Tooltip placement="top" title="更新">
+        <Tooltip placement="top" title="Update">
           <CloudUploadOutlined onClick={() => {
             getInfo(record);
           }} />
         </Tooltip>
-        <Tooltip placement="top" title="删除">
+        <Tooltip placement="top" title="Delete">
           <Popconfirm
             title="Delete the task"
             description="Are you sure to delete this task?"
@@ -67,7 +67,7 @@ const createColumns = (openFile, deleteFile, getInfo, openFileDirectory) => [
             <DeleteOutlined />
           </Popconfirm>
         </Tooltip>
-        <Tooltip placement="top" title="打开文件夹">
+        <Tooltip placement="top" title="Open Folder">
           <FolderOpenOutlined onClick={() => {
             openFileDirectory(record);
           }} />
