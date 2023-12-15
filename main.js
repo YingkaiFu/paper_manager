@@ -276,10 +276,12 @@ ipcMain.handle('uploadFile', (event, { fileName, sourcePath, destinationPath }) 
   });
 });
 ipcMain.handle('addFolder', async (event, folderName) => {
-  new_path = path.join(folderName, "新建类别");
-  fs.mkdirSync(new_path)
-
-  console.log('Folder created successfully');
+  const new_path = path.join(folderName, "新建类别");
+  try {
+  const state = fs.mkdirSync(new_path)
+  } catch (err) {
+    return { error: `无法创建文件夹: ${err.message}` };
+  }
   result = fs.readdirSync(folderName, { withFileTypes: true })
     .filter(item => item.isDirectory());
   return result;

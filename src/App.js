@@ -1,6 +1,6 @@
 import './App.css';
 import React, { useState, useEffect } from 'react';
-import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography } from 'antd';
+import { Layout, Space, Button, Flex, Table, Upload, message, Input, notification, Modal, Row, Col, Typography } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import Category from './components/Category.js';
 import ItemList from './components/ItemList.js';
@@ -123,7 +123,19 @@ function App() {
   async function addfoler() {
     const result = await window.electronAPI.addFolder(rootFolder);
     // const folderContents = result.folderContents;
-    setFolder(result);
+    if (result.error){
+      notification['error']({
+        message: 'Error',
+        description:
+          'The folder name already exists',
+        duration: 2,
+        placement: 'topRight',
+      });
+    }
+    else{
+      setFolder(result);
+
+    }
   };
   async function openFile(file) {
     const result = await window.electronAPI.openFile(file.key);
