@@ -11,7 +11,7 @@ function renameFolderPath(originalPath, newName) {
   return originalPath.substring(0, lastBackslashIndex + 1) + newName;
 }
 
-const Category = ({ categorys, clickFoler, onRenameClick, activeFolder, }) => {
+const Category = ({ categorys, clickFoler, onRenameClick, activeFolder, isediting}) => {
 
   const [editingKey, setEditingKey] = useState(null);
   const [editingName, setEditingName] = useState('');

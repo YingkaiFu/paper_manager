@@ -96,6 +96,7 @@ function App() {
   const [updatedFile, setUpdatedFile] = useState(null);
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isEditing, setEditing] = useState(false);
 
   // 定义状态来保存文件信息
   async function opendilog() {
@@ -146,6 +147,10 @@ function App() {
     updatedFiles[fileIndex] = { ...updatedFiles[fileIndex], ...updatedFile };
     setFiles(updatedFiles);
     setIsModalVisible(false);
+  };
+  const handleEdit = () => {
+    // 更新 files 状态
+    setEditing(true);
   };
   const handleReset = () => {
     // 更新 files 状态
@@ -211,13 +216,33 @@ function App() {
         <Sider style={siderStyle}>
 
           <Flex vertical gap="small" style={{ width: '100%' }}>
-            <Search placeholder="input search text" onSearch={onSearch} enterButton />
+            {/* <Search placeholder="input search text" onSearch={onSearch} enterButton /> */}
+            {/* <Text strong textAlign='left'>Category</Text> */}
+            <Flex justify="space-between" style={{ margin: "15px", alignItems: 'center' }}>
+              <Typography.Title
+                level={4}
+                style={{
+                  margin: 0, // 移除默认的外边距
+                  lineHeight: 'initial', // 调整行高以匹配按钮高度
+                  display: 'flex', // 使 Typography 支持 Flexbox 属性
+                  alignItems: 'center', // 在 Typography 内部垂直居中文本
+                  textAlign: "center",
+                }}
+              >
+                Category
+              </Typography.Title>
+              <Button type="link" onClick={handleEdit} size='large'>
+                Edit
+              </Button>
+            </Flex>
+            
             {Folder && Folder.length > 0 && (
               <Category
                 categorys={Folder}
                 clickFoler={(id) => { showFolder(id.key); }}
                 onRenameClick={(src, des) => { onRenameClick(src, des); }}
                 activeFolder={activeFolder}
+                editing={isEditing}
               />
             )}
             <Flex vertical style={{ width: '100%', bottom: 0, position: "absolute", }}>
