@@ -49,6 +49,10 @@ jobs:
         - name: release
           uses: softprops/action-gh-release@v1
           with:
+            tag_name: ${{ github.ref }}
+            name: Release ${{ github.ref }}
             files: "dist/*.exe"
+            draft: false
+            prerelease: false
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
