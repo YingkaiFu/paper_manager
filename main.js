@@ -218,8 +218,21 @@ ipcMain.handle('openDialog', async () => {
 
   if (!result.canceled) {
     const folderPath = result.filePaths[0];
-    const folderContents = fs.readdirSync(folderPath, { withFileTypes: true })
-      .filter(item => item.isDirectory());
+    let folderContents = fs.readdirSync(folderPath, { withFileTypes: true })
+    .filter(item => item.isDirectory())
+    .map(dir => {
+      const subFolderPath = path.join(folderPath, dir.name);
+
+      // 计算该子目录下的 PDF 文件数量
+      const pdfCount = fs.readdirSync(subFolderPath)
+        .filter(file => file.endsWith('.pdf')).length;
+  
+      // 返回原始对象，并添加 pdfCount 属性
+      return {
+        ...dir, // 展开原有属性
+        pdfCount: pdfCount // 添加新属性
+      };
+    });
     const config = {
       folderPath: folderPath,
       folderContents: folderContents,
@@ -285,6 +298,31 @@ ipcMain.handle('addFolder', async (event, folderName) => {
   return result;
 });
 
+ipcMain.handle('deleteFolder', async (event, directory) => {
+  fs.rmdirSync(directory, { recursive: true });
+  console.log('Folder delete successfully');
+  const currentData = await new Promise((resolve, reject) => {
+    db.findOne({ _id: 'folderData' }).exec((err, doc) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(doc);
+      }
+    });
+  });
+
+  console.log(currentData.folderContents)
+  if (currentData && currentData.folderContents) {
+    // 获取要删除的文件夹名称（假设 directory 是完整路径）
+    const folderNameToDelete = path.basename(directory);
+
+    // 过滤掉名字匹配的项
+    const updatedFolderContents = currentData.folderContents.filter(item => item.name !== folderNameToDelete);
+    console.log(updatedFolderContents, 'updatedFolderContents',folderNameToDelete,currentData);
+    // 更新数据库记录
+    await db.update({ _id: 'folderData' }, { $set: { folderContents: updatedFolderContents } }, {});
+  }
+});
 ipcMain.handle('renameFolder', async (event, { src, des }) => {
   state = fs.renameSync(src, des)
   console.log('Folder rename successfully');

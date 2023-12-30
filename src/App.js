@@ -1,7 +1,7 @@
 import './App.css';
 import React, { useState, useEffect } from 'react';
 import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography } from 'antd';
-import { InboxOutlined } from '@ant-design/icons';
+import { InboxOutlined,FolderAddOutlined } from '@ant-design/icons';
 import Category from './components/Category.js';
 import ItemList from './components/ItemList.js';
 
@@ -42,8 +42,6 @@ const category_button = {
 
 };
 
-const onSearch = (value, _e, info) => console.log(info?.source, value);
-
 const properties = [
   { key: 'title', label: 'Title', component: TextArea },
   { key: 'authors', label: 'Authors', component: TextArea },
@@ -51,7 +49,11 @@ const properties = [
   { key: 'journal', label: 'Journal', component: Input },
 ];
 
-const MyComponent = ({ currentFile, updatedFile }) => {
+const MyComponent = ({ currentFile, updatedFile, setUpdatedFile }) => {
+  const handleInputChange = (key, value) => {
+    setUpdatedFile(prev => ({ ...prev, [key]: value }));
+  };
+
   const renderRow = (key, label, Component) => (
     <Row>
       <Col span={4}>
@@ -60,10 +62,14 @@ const MyComponent = ({ currentFile, updatedFile }) => {
         </Typography.Title>
       </Col>
       <Col span={10}>
-        <Component value={currentFile?.[key] || ''} autoSize={{ minRows: 2, maxRows: 5 }} />
+        <Component value={currentFile?.[key] || ''} autoSize={{ minRows: 2, maxRows: 5 }} readOnly />
       </Col>
       <Col span={10}>
-        <Component value={updatedFile?.[key] || ''} autoSize={{ minRows: 2, maxRows: 5 }} />
+        <Component
+          value={updatedFile?.[key] || ''}
+          onChange={(e) => handleInputChange(key, e.target.value)}
+          autoSize={{ minRows: 2, maxRows: 5 }}
+        />
       </Col>
     </Row>
   );
@@ -97,7 +103,16 @@ function App() {
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditing, setEditing] = useState(false);
+  const [filteredFiles, setFilteredFiles] = useState([]);
 
+  const handleSearch = (keyword) => {
+    if (!keyword) {
+      setFilteredFiles(files);
+    } else {
+      const filtered = files.filter(file => file.title.toLowerCase().includes(keyword.toLowerCase()));
+      setFilteredFiles(filtered);
+    }
+  };
   // 定义状态来保存文件信息
   async function opendilog() {
     const result = await window.electronAPI.openDialog();
@@ -126,6 +141,16 @@ function App() {
     // const folderContents = result.folderContents;
     setFolder(result);
   };
+  async function deleteFolder(folder_name){
+    await window.electronAPI.deleteFolder(folder_name);
+    const result = await window.electronAPI.initFolder();
+    if (!result) {
+      return;
+    }
+    const folderPath = result.folderPath;
+    const folderContents = result.folderContents;
+    setFolder(folderContents);
+  }
   async function openFile(file) {
     const result = await window.electronAPI.openFile(file.key);
   };
@@ -150,8 +175,11 @@ function App() {
   };
   const handleEdit = () => {
     // 更新 files 状态
-    setEditing(true);
+    setEditing(!isEditing);
   };
+
+  const onSearch = (value) => handleSearch(value);
+
   const handleReset = () => {
     // 更新 files 状态
     const updatedFiles = [...files];
@@ -189,6 +217,10 @@ function App() {
   //   setMyValue(e.target.value);
   // };
   useEffect(() => {
+    setFilteredFiles(files);
+  }, [files]);
+
+  useEffect(() => {
     async function initFolder() {
       const result = await window.electronAPI.initFolder();
       if (!result) {
@@ -213,10 +245,9 @@ function App() {
   return (
     <div className="App ">
       <Layout>
-        <Sider style={siderStyle}>
+        <Sider style={siderStyle} width="220">
 
           <Flex vertical gap="small" style={{ width: '100%' }}>
-            {/* <Search placeholder="input search text" onSearch={onSearch} enterButton /> */}
             {/* <Text strong textAlign='left'>Category</Text> */}
             <Flex justify="space-between" style={{ margin: "15px", alignItems: 'center' }}>
               <Typography.Title
@@ -229,10 +260,10 @@ function App() {
                   textAlign: "center",
                 }}
               >
-                Category
+                My Papers
               </Typography.Title>
-              <Button type="link" onClick={handleEdit} size='large'>
-                Edit
+              <Button type="primary" onClick={handleEdit} >
+                  {isEditing ? 'Finish' : 'Edit'} {/* 根据 isEditing 状态显示不同文本 */}
               </Button>
             </Flex>
             
@@ -241,24 +272,14 @@ function App() {
                 categorys={Folder}
                 clickFoler={(id) => { showFolder(id.key); }}
                 onRenameClick={(src, des) => { onRenameClick(src, des); }}
+                onDeleteClick={deleteFolder}
                 activeFolder={activeFolder}
-                editing={isEditing}
+                isediting={isEditing}
               />
             )}
-            <Flex vertical style={{ width: '100%', bottom: 0, position: "absolute", }}>
-              <Button type="primary" style={category_button} block onClick={opendilog} >
-                打开文件夹
-              </Button>
-              <Button type="primary" style={category_button} block onClick={addfoler}>
-                增加类别
-              </Button>
-            </Flex>
-          </Flex>
-        </Sider>
-        <Layout>
-          <Header style={headerStyle}>
-            <Row>
-              <Col span={12}><Dragger
+            <Flex vertical style={{ width: '100%',padding: '0 10px',bottom: 0, position: "absolute", justify:"center"}}>
+            <Dragger
+                // style={{padding:"15px 15px 0px 15px"}}
                 width="50%"
                 name='file'
                 multiple={true}
@@ -287,17 +308,34 @@ function App() {
                 <p className="ant-upload-drag-icon">
                   <InboxOutlined />
                 </p>
-                {/* <p className="ant-upload-text">Upload</p> */}
-              </Dragger></Col>
-
-
+                <p className="ant-upload-text">Click or drag file to this area to upload to current category.</p>
+              </Dragger>
+              {!isEditing && <Button type="primary" style={category_button} block onClick={opendilog} >
+                Open Folder
+              </Button>}
+              {isEditing && <Button type="primary" style={category_button} block onClick={addfoler}>
+                Add Categroy
+              </Button>
+              }
+            </Flex>
+          </Flex>
+        </Sider>
+        <Layout>
+          <Header style={headerStyle}>
+            <Row>
+              <Search 
+            style={{
+              padding:"15px 15px 0px 15px"
+            }}
+            placeholder="Search articles" onSearch={onSearch} enterButton />
             </Row>
-
+            {/* <Col span={12}>
+              </Col> */}
           </Header>
           <Content style={contentStyle}>
             {
               <ItemList
-                items={files}
+                items={filteredFiles}
                 openFile={openFile}
                 deleteFile={deleteFile}
                 getInfo={getInfo}
@@ -323,11 +361,11 @@ function App() {
                 </Button>,
               ]}
             >
-              <MyComponent
-                currentFile={currentFile}
-                updatedFile={updatedFile}
-              >
-              </MyComponent>
+            <MyComponent
+              currentFile={currentFile}
+              updatedFile={updatedFile}
+              setUpdatedFile={setUpdatedFile}
+            />
             </Modal>
           </Content>
         </Layout>
