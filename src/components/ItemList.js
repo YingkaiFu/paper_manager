@@ -4,10 +4,11 @@ import {
   DeleteOutlined,
   CloudUploadOutlined,
   FolderOpenOutlined,
+  ScissorOutlined,
 } from '@ant-design/icons';
 
 
-const createColumns = (openFile, deleteFile, getInfo, openFileDirectory) => [
+const createColumns = (openFile, deleteFile, getInfo, openFileDirectory,moveFile) => [
   {
     title: 'Name',
     dataIndex: 'title',
@@ -72,6 +73,11 @@ const createColumns = (openFile, deleteFile, getInfo, openFileDirectory) => [
             openFileDirectory(record);
           }} />
         </Tooltip>
+        <Tooltip placement="top" title="移动">
+          <ScissorOutlined onClick={() => {
+            moveFile(record);
+          }} />
+        </Tooltip>
       </Space>
     ),
   },
@@ -87,9 +93,9 @@ const rowSelection = {
   }),
 };
 
-const ItemList = ({ items, openFile, deleteFile, getInfo, openFileDirectory }) => {
+const ItemList = ({ items, openFile, deleteFile, getInfo, openFileDirectory,moveFile }) => {
   const [selectionType, setSelectionType] = useState('checkbox');
-  const columns = createColumns(openFile, deleteFile, getInfo, openFileDirectory);
+  const columns = createColumns(openFile, deleteFile, getInfo, openFileDirectory,moveFile);
   return (
     <Table
     rowSelection={{

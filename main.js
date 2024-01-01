@@ -132,7 +132,7 @@ Menu.setApplicationMenu(menu)
 function createWindow() {
   // 创建浏览器窗口
   const win = new BrowserWindow({
-    width: 1200,
+    width: 1250,
     height: 800,
     // resizable: false, // 禁止调整窗口大小
     icon: path.join(__dirname, 'assets', 'icons', 'logo.png'),

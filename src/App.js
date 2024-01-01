@@ -98,6 +98,7 @@ function App() {
   const [rootFolder, setRootFolder] = useState("");
   const [activeFolder, setActivedFoler] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isMove, setIsMove] = useState(false);
   const [currentFile, setCurrentFile] = useState(null);
   const [updatedFile, setUpdatedFile] = useState(null);
   const [files, setFiles] = useState([]);
@@ -159,11 +160,24 @@ function App() {
     window.electronAPI.openFileDirectory(file.key);
     // const result = await window.electronAPI.openFileDirectory(file.key);
   };
+  async function moveFile(file) {
+    setCurrentFile(file);
+    console.log(file);
+    setIsMove(true);
+  };
+
+  async function moveCancel() {
+    setIsMove(false);
+  }
+
   async function deleteFile(file) {
     const result = await window.electronAPI.deleteFile(file.key);
     showFolder(activeFolder[0]);
   }
 
+  const handleMove = () => {
+    
+  }
 
   const handleOk = () => {
     // 更新 files 状态
@@ -340,6 +354,7 @@ function App() {
                 deleteFile={deleteFile}
                 getInfo={getInfo}
                 openFileDirectory={openFileDirectory}
+                moveFile={moveFile}
               />
             }
             <Modal
@@ -367,6 +382,39 @@ function App() {
               setUpdatedFile={setUpdatedFile}
             />
             </Modal>
+            <Modal
+              title="Move Paper"
+              open={isMove}
+              onOk={handleMove}
+              width={400}
+              onCancel={() => moveCancel(false)}
+              confirmLoading={isLoading}
+              footer={[
+                <Button key="back" onClick={moveCancel}>
+                  Cancel
+                </Button>,
+                <Button key="Comfirm" type="primary" loading={isLoading} onClick={handleOk}>
+                  Update
+                </Button>,
+              ]}
+             >
+              <Row>
+                <Col span={12}>
+                  Source Path
+                </Col>
+                <Col span={12}>
+                  Destinate Path
+                </Col>
+              </Row>
+              <Row>
+                <Col span={12}>
+                {setIsMove && currentFile?.category}
+                </Col>
+                <Col span={12}>
+                  good
+                </Col>
+              </Row>
+             </Modal>
           </Content>
         </Layout>
       </Layout>
