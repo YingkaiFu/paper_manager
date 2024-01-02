@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Space, Layout, Menu, Input, Row, Col,Popconfirm } from 'antd';
+import { Space, Layout, Menu, Input, Row, Col,Popconfirm,Badge } from 'antd';
 import { EditOutlined,DeleteOutlined,CloseOutlined,CheckOutlined,RightOutlined } from '@ant-design/icons';
 
 function renameFolderPath(originalPath, newName) {
@@ -66,8 +66,16 @@ const Category = ({ categorys, clickFoler, onRenameClick, onDeleteClick,activeFo
                 }
               />
             ) : (
-              <Row justify="space-between" align="middle">
+              <Row justify="space-between" align="left">
                 <Col>
+                <span style={{
+                  display: 'inline-block',
+                  width: '10px', // 颜色区域的宽度
+                  height: '30px', // 颜色区域的高度
+                  backgroundColor: category.color, // 设置背景颜色为 category 的颜色
+                  marginRight: '5px', // 右侧的间隔
+                  verticalAlign: 'middle', // 垂直对齐
+                }}></span>
                   {category.name}
                 </Col>
                 {isediting ?(

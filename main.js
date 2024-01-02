@@ -230,7 +230,8 @@ ipcMain.handle('openDialog', async () => {
       // 返回原始对象，并添加 pdfCount 属性
       return {
         ...dir, // 展开原有属性
-        pdfCount: pdfCount // 添加新属性
+        pdfCount: pdfCount, // 添加新属性
+        color: '1677FF',
       };
     });
     const config = {
@@ -288,19 +289,13 @@ ipcMain.handle('uploadFile', (event, { fileName, sourcePath, destinationPath }) 
     }
   });
 });
-ipcMain.handle('addFolder', async (event, folderName) => {
-  new_path = path.join(folderName, "新建类别");
-  fs.mkdirSync(new_path)
+ipcMain.handle('addFolder', async (event, rootFolder, categoryName, categoryColor) => {
+  const new_path = path.join(rootFolder, categoryName);
+  fs.mkdirSync(new_path, { recursive: true });
 
   console.log('Folder created successfully');
-  result = fs.readdirSync(folderName, { withFileTypes: true })
-    .filter(item => item.isDirectory());
-  return result;
-});
 
-ipcMain.handle('deleteFolder', async (event, directory) => {
-  fs.rmdirSync(directory, { recursive: true });
-  console.log('Folder delete successfully');
+  // 获取当前的 folderContents
   const currentData = await new Promise((resolve, reject) => {
     db.findOne({ _id: 'folderData' }).exec((err, doc) => {
       if (err) {
@@ -311,7 +306,37 @@ ipcMain.handle('deleteFolder', async (event, directory) => {
     });
   });
 
-  console.log(currentData.folderContents)
+  // 创建新文件夹的对象
+  const newFolder = {
+    name: categoryName,
+    path:rootFolder,
+    pdfCount: 0, // 新创建的文件夹初始 PDF 数量为 0
+    color: categoryColor || '1677FF' // 使用指定的颜色或默认颜色
+  };
+
+  // 如果已有 folderContents，则追加新文件夹，否则创建新数组
+  const updatedFolderContents = currentData && currentData.folderContents
+    ? [...currentData.folderContents, newFolder]
+    : [newFolder];
+
+  // 更新数据库记录
+  await db.update({ _id: 'folderData' }, { $set: { folderContents: updatedFolderContents } }, { upsert: true });
+
+  // 返回更新后的文件夹列表
+  return updatedFolderContents;
+});
+
+ipcMain.handle('deleteFolder', async (event, directory) => {
+  fs.rmdirSync(directory, { recursive: true });
+  const currentData = await new Promise((resolve, reject) => {
+    db.findOne({ _id: 'folderData' }).exec((err, doc) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(doc);
+      }
+    });
+  });
   if (currentData && currentData.folderContents) {
     // 获取要删除的文件夹名称（假设 directory 是完整路径）
     const folderNameToDelete = path.basename(directory);
@@ -320,7 +345,7 @@ ipcMain.handle('deleteFolder', async (event, directory) => {
     const updatedFolderContents = currentData.folderContents.filter(item => item.name !== folderNameToDelete);
     console.log(updatedFolderContents, 'updatedFolderContents',folderNameToDelete,currentData);
     // 更新数据库记录
-    await db.update({ _id: 'folderData' }, { $set: { folderContents: updatedFolderContents } }, {});
+    const result = await db.update({ _id: 'folderData' }, { $set: { folderContents: updatedFolderContents } }, {});
   }
 });
 ipcMain.handle('renameFolder', async (event, { src, des }) => {

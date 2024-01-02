@@ -1,7 +1,9 @@
 import './App.css';
 import React, { useState, useEffect } from 'react';
-import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography } from 'antd';
+import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography,ColorPicker,theme,Form } from 'antd';
 import { InboxOutlined,FolderAddOutlined } from '@ant-design/icons';
+import { generate, green, presetPalettes, red } from '@ant-design/colors';
+import { ColorFactory } from 'antd/es/color-picker/color.js';
 import Category from './components/Category.js';
 import ItemList from './components/ItemList.js';
 
@@ -41,13 +43,18 @@ const category_button = {
   margin: '5px 0px',
 
 };
-
 const properties = [
   { key: 'title', label: 'Title', component: TextArea },
   { key: 'authors', label: 'Authors', component: TextArea },
   { key: 'year', label: 'Year', component: Input },
   { key: 'journal', label: 'Journal', component: Input },
 ];
+
+const genPresets = (presets = presetPalettes) =>
+  Object.entries(presets).map(([label, colors]) => ({
+    label,
+    colors,
+  }));
 
 const MyComponent = ({ currentFile, updatedFile, setUpdatedFile }) => {
   const handleInputChange = (key, value) => {
@@ -92,6 +99,8 @@ const MyComponent = ({ currentFile, updatedFile, setUpdatedFile }) => {
   );
 };
 
+
+
 function App() {
 
   const [Folder, setFolder] = useState([]);
@@ -105,6 +114,11 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isEditing, setEditing] = useState(false);
   const [filteredFiles, setFilteredFiles] = useState([]);
+  const [messageApi, contextHolder] = message.useMessage();
+  const [modal2Open, setModal2Open] = useState(false);
+  const {token } = theme.useToken();
+  const [newColor, setnewColor] = useState(token.colorPrimary);
+  const [newCateName, setNewCateName] = useState("");
 
   const handleSearch = (keyword) => {
     if (!keyword) {
@@ -124,7 +138,14 @@ function App() {
       setFolder(folderContents);
     }
   };
-
+  async function comfirmCreateColor(){
+    const categroyColor = newColor;
+    const categoryName = newCateName;
+    const result = await window.electronAPI.addFolder(rootFolder,categoryName,categroyColor);
+    setFolder(result);
+    setModal2Open(false);
+  };
+  
   async function showFolder(folder) {
     const result = await window.electronAPI.listFolder(folder);
     setFiles([...result]);
@@ -138,12 +159,11 @@ function App() {
     setActivedFoler([des]);
   }
   async function addfoler() {
-    const result = await window.electronAPI.addFolder(rootFolder);
-    // const folderContents = result.folderContents;
-    setFolder(result);
+    setModal2Open(true);
   };
   async function deleteFolder(folder_name){
     await window.electronAPI.deleteFolder(folder_name);
+    messageApi.success('Delete category successfully!');
     const result = await window.electronAPI.initFolder();
     if (!result) {
       return;
@@ -336,6 +356,7 @@ function App() {
         </Sider>
         <Layout>
           <Header style={headerStyle}>
+          {contextHolder}
             <Row>
               <Search 
             style={{
@@ -415,6 +436,31 @@ function App() {
                 </Col>
               </Row>
              </Modal>
+             <Modal
+              title="Creating new category"
+              centered
+              open={modal2Open}
+              onOk={comfirmCreateColor}
+              onCancel={() => setModal2Open(false)}
+              >
+              <div>
+              <Typography.Title level={5}>Select color</Typography.Title>
+
+              <ColorPicker value={newColor} onChange={setnewColor}/>
+
+              <Typography.Title level={5}>Input category name</Typography.Title>
+              <Input
+                count={{
+                  show: true,
+                  max: 12,
+                }}
+                defaultValue="New Category"
+                value={newCateName}
+                onChange={(e) => setNewCateName(e.target.value)}
+/>
+            </div>
+              
+            </Modal>
           </Content>
         </Layout>
       </Layout>
