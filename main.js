@@ -231,7 +231,7 @@ ipcMain.handle('openDialog', async () => {
       return {
         ...dir, // 展开原有属性
         pdfCount: pdfCount, // 添加新属性
-        color: '1677FF',
+        color: '#1677FF',
       };
     });
     const config = {
@@ -311,7 +311,7 @@ ipcMain.handle('addFolder', async (event, rootFolder, categoryName, categoryColo
     name: categoryName,
     path:rootFolder,
     pdfCount: 0, // 新创建的文件夹初始 PDF 数量为 0
-    color: categoryColor || '1677FF' // 使用指定的颜色或默认颜色
+    color: categoryColor || '#1677FF' // 使用指定的颜色或默认颜色
   };
 
   // 如果已有 folderContents，则追加新文件夹，否则创建新数组

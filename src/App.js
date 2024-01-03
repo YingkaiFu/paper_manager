@@ -1,12 +1,11 @@
 import './App.css';
 import React, { useState, useEffect } from 'react';
-import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography,ColorPicker,theme,Form } from 'antd';
+import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography,ColorPicker,theme,Form,Select } from 'antd';
 import { InboxOutlined,FolderAddOutlined } from '@ant-design/icons';
 import { generate, green, presetPalettes, red } from '@ant-design/colors';
 import { ColorFactory } from 'antd/es/color-picker/color.js';
 import Category from './components/Category.js';
 import ItemList from './components/ItemList.js';
-
 const { Header, Footer, Sider, Content } = Layout;
 const { Dragger } = Upload;
 const { Search } = Input;
@@ -119,7 +118,21 @@ function App() {
   const {token } = theme.useToken();
   const [newColor, setnewColor] = useState(token.colorPrimary);
   const [newCateName, setNewCateName] = useState("");
+  const [selectedValue, setSelectedValue] = useState(undefined);
 
+const debug = () => {
+  console.log(activeFolder);
+  console.log(Folder);
+}
+
+  const presets = genPresets({
+    primary: generate(token.colorPrimary),
+  });
+
+  const folderOptions = Folder.map(folder => ({
+    value: folder.name, // 假设你想要用name作为value
+    label: folder.name, // 这里也使用name作为显示的label
+  }));
   const handleSearch = (keyword) => {
     if (!keyword) {
       setFilteredFiles(files);
@@ -171,6 +184,8 @@ function App() {
     const folderPath = result.folderPath;
     const folderContents = result.folderContents;
     setFolder(folderContents);
+    setActivedFoler([folderContents[0].name])
+    showFolder(activeFolder[0]);
   }
   async function openFile(file) {
     const result = await window.electronAPI.openFile(file.key);
@@ -366,6 +381,7 @@ function App() {
             </Row>
             {/* <Col span={12}>
               </Col> */}
+              {/* <Button onClick={debug}>Debug</Button> */}
           </Header>
           <Content style={contentStyle}>
             {
@@ -407,7 +423,7 @@ function App() {
               title="Move Paper"
               open={isMove}
               onOk={handleMove}
-              width={400}
+              width={350}
               onCancel={() => moveCancel(false)}
               confirmLoading={isLoading}
               footer={[
@@ -419,37 +435,30 @@ function App() {
                 </Button>,
               ]}
              >
-              <Row>
-                <Col span={12}>
-                  Source Path
-                </Col>
-                <Col span={12}>
-                  Destinate Path
-                </Col>
-              </Row>
-              <Row>
-                <Col span={12}>
-                {setIsMove && currentFile?.category}
-                </Col>
-                <Col span={12}>
-                  good
-                </Col>
-              </Row>
+              <Select
+                style={{
+                  width: 120,
+                }}
+                allowClear
+                value={selectedValue}
+                onChange={setSelectedValue}
+                options={folderOptions}
+              />
              </Modal>
              <Modal
               title="Creating new category"
               centered
               open={modal2Open}
               onOk={comfirmCreateColor}
+              width={400}
               onCancel={() => setModal2Open(false)}
               >
-              <div>
-              <Typography.Title level={5}>Select color</Typography.Title>
-
-              <ColorPicker value={newColor} onChange={setnewColor}/>
-
-              <Typography.Title level={5}>Input category name</Typography.Title>
-              <Input
+              <Row align="middle" gutter={[16, 16]}>
+                <Col span={8}>
+                Category Name:
+                </Col>
+                <Col span={16}>
+                <Input
                 count={{
                   show: true,
                   max: 12,
@@ -457,9 +466,16 @@ function App() {
                 defaultValue="New Category"
                 value={newCateName}
                 onChange={(e) => setNewCateName(e.target.value)}
-/>
-            </div>
-              
+                />
+                </Col>
+                <Col span={8}>
+                Category Color:
+                </Col>
+                <Col span={16}>
+                <ColorPicker value={newColor} onChange={setnewColor} presets={presets}/>
+                </Col>
+              </Row>
+
             </Modal>
           </Content>
         </Layout>
