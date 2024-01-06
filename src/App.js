@@ -1,10 +1,16 @@
 import './App.css';
 import React, { useState, useEffect } from 'react';
+<<<<<<< HEAD
 import { Layout, Space, Button, Flex, Table, Upload, message, Input, notification, Modal, Row, Col, Typography } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
+=======
+import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography,ColorPicker,theme,Form,Select } from 'antd';
+import { InboxOutlined,FolderAddOutlined } from '@ant-design/icons';
+import { generate, green, presetPalettes, red } from '@ant-design/colors';
+import { ColorFactory } from 'antd/es/color-picker/color.js';
+>>>>>>> origin/master
 import Category from './components/Category.js';
 import ItemList from './components/ItemList.js';
-
 const { Header, Footer, Sider, Content } = Layout;
 const { Dragger } = Upload;
 const { Search } = Input;
@@ -41,9 +47,6 @@ const category_button = {
   margin: '5px 0px',
 
 };
-
-const onSearch = (value, _e, info) => console.log(info?.source, value);
-
 const properties = [
   { key: 'title', label: 'Title', component: TextArea },
   { key: 'authors', label: 'Authors', component: TextArea },
@@ -51,7 +54,17 @@ const properties = [
   { key: 'journal', label: 'Journal', component: Input },
 ];
 
-const MyComponent = ({ currentFile, updatedFile }) => {
+const genPresets = (presets = presetPalettes) =>
+  Object.entries(presets).map(([label, colors]) => ({
+    label,
+    colors,
+  }));
+
+const MyComponent = ({ currentFile, updatedFile, setUpdatedFile }) => {
+  const handleInputChange = (key, value) => {
+    setUpdatedFile(prev => ({ ...prev, [key]: value }));
+  };
+
   const renderRow = (key, label, Component) => (
     <Row>
       <Col span={4}>
@@ -60,10 +73,14 @@ const MyComponent = ({ currentFile, updatedFile }) => {
         </Typography.Title>
       </Col>
       <Col span={10}>
-        <Component value={currentFile?.[key] || ''} autoSize={{ minRows: 2, maxRows: 5 }} />
+        <Component value={currentFile?.[key] || ''} autoSize={{ minRows: 2, maxRows: 5 }} readOnly />
       </Col>
       <Col span={10}>
-        <Component value={updatedFile?.[key] || ''} autoSize={{ minRows: 2, maxRows: 5 }} />
+        <Component
+          value={updatedFile?.[key] || ''}
+          onChange={(e) => handleInputChange(key, e.target.value)}
+          autoSize={{ minRows: 2, maxRows: 5 }}
+        />
       </Col>
     </Row>
   );
@@ -86,17 +103,49 @@ const MyComponent = ({ currentFile, updatedFile }) => {
   );
 };
 
+
+
 function App() {
 
   const [Folder, setFolder] = useState([]);
   const [rootFolder, setRootFolder] = useState("");
   const [activeFolder, setActivedFoler] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isMove, setIsMove] = useState(false);
   const [currentFile, setCurrentFile] = useState(null);
   const [updatedFile, setUpdatedFile] = useState(null);
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isEditing, setEditing] = useState(false);
+  const [filteredFiles, setFilteredFiles] = useState([]);
+  const [messageApi, contextHolder] = message.useMessage();
+  const [modal2Open, setModal2Open] = useState(false);
+  const {token } = theme.useToken();
+  const [newColor, setnewColor] = useState(token.colorPrimary);
+  const [newCateName, setNewCateName] = useState("");
+  const [selectedValue, setSelectedValue] = useState(undefined);
 
+const debug = () => {
+  console.log(activeFolder);
+  console.log(Folder);
+}
+
+  const presets = genPresets({
+    primary: generate(token.colorPrimary),
+  });
+
+  const folderOptions = Folder.map(folder => ({
+    value: folder.name, // 假设你想要用name作为value
+    label: folder.name, // 这里也使用name作为显示的label
+  }));
+  const handleSearch = (keyword) => {
+    if (!keyword) {
+      setFilteredFiles(files);
+    } else {
+      const filtered = files.filter(file => file.title.toLowerCase().includes(keyword.toLowerCase()));
+      setFilteredFiles(filtered);
+    }
+  };
   // 定义状态来保存文件信息
   async function opendilog() {
     const result = await window.electronAPI.openDialog();
@@ -107,7 +156,14 @@ function App() {
       setFolder(folderContents);
     }
   };
-
+  async function comfirmCreateColor(){
+    const categroyColor = newColor;
+    const categoryName = newCateName;
+    const result = await window.electronAPI.addFolder(rootFolder,categoryName,categroyColor);
+    setFolder(result);
+    setModal2Open(false);
+  };
+  
   async function showFolder(folder) {
     const result = await window.electronAPI.listFolder(folder);
     setFiles([...result]);
@@ -121,6 +177,7 @@ function App() {
     setActivedFoler([des]);
   }
   async function addfoler() {
+<<<<<<< HEAD
     const result = await window.electronAPI.addFolder(rootFolder);
     // const folderContents = result.folderContents;
     if (result.error){
@@ -136,7 +193,23 @@ function App() {
       setFolder(result);
 
     }
+=======
+    setModal2Open(true);
+>>>>>>> origin/master
   };
+  async function deleteFolder(folder_name){
+    await window.electronAPI.deleteFolder(folder_name);
+    messageApi.success('Delete category successfully!');
+    const result = await window.electronAPI.initFolder();
+    if (!result) {
+      return;
+    }
+    const folderPath = result.folderPath;
+    const folderContents = result.folderContents;
+    setFolder(folderContents);
+    setActivedFoler([folderContents[0].name])
+    showFolder(activeFolder[0]);
+  }
   async function openFile(file) {
     const result = await window.electronAPI.openFile(file.key);
   };
@@ -145,11 +218,24 @@ function App() {
     window.electronAPI.openFileDirectory(file.key);
     // const result = await window.electronAPI.openFileDirectory(file.key);
   };
+  async function moveFile(file) {
+    setCurrentFile(file);
+    console.log(file);
+    setIsMove(true);
+  };
+
+  async function moveCancel() {
+    setIsMove(false);
+  }
+
   async function deleteFile(file) {
     const result = await window.electronAPI.deleteFile(file.key);
     showFolder(activeFolder[0]);
   }
 
+  const handleMove = () => {
+    
+  }
 
   const handleOk = () => {
     // 更新 files 状态
@@ -159,6 +245,13 @@ function App() {
     setFiles(updatedFiles);
     setIsModalVisible(false);
   };
+  const handleEdit = () => {
+    // 更新 files 状态
+    setEditing(!isEditing);
+  };
+
+  const onSearch = (value) => handleSearch(value);
+
   const handleReset = () => {
     // 更新 files 状态
     const updatedFiles = [...files];
@@ -196,6 +289,10 @@ function App() {
   //   setMyValue(e.target.value);
   // };
   useEffect(() => {
+    setFilteredFiles(files);
+  }, [files]);
+
+  useEffect(() => {
     async function initFolder() {
       const result = await window.electronAPI.initFolder();
       if (!result) {
@@ -220,18 +317,39 @@ function App() {
   return (
     <div className="App ">
       <Layout>
-        <Sider style={siderStyle}>
+        <Sider style={siderStyle} width="220">
 
           <Flex vertical gap="small" style={{ width: '100%' }}>
-            <Search placeholder="input search text" onSearch={onSearch} enterButton />
+            {/* <Text strong textAlign='left'>Category</Text> */}
+            <Flex justify="space-between" style={{ margin: "15px", alignItems: 'center' }}>
+              <Typography.Title
+                level={4}
+                style={{
+                  margin: 0, // 移除默认的外边距
+                  lineHeight: 'initial', // 调整行高以匹配按钮高度
+                  display: 'flex', // 使 Typography 支持 Flexbox 属性
+                  alignItems: 'center', // 在 Typography 内部垂直居中文本
+                  textAlign: "center",
+                }}
+              >
+                My Papers
+              </Typography.Title>
+              <Button type="primary" onClick={handleEdit} >
+                  {isEditing ? 'Finish' : 'Edit'} {/* 根据 isEditing 状态显示不同文本 */}
+              </Button>
+            </Flex>
+            
             {Folder && Folder.length > 0 && (
               <Category
                 categorys={Folder}
                 clickFoler={(id) => { showFolder(id.key); }}
                 onRenameClick={(src, des) => { onRenameClick(src, des); }}
+                onDeleteClick={deleteFolder}
                 activeFolder={activeFolder}
+                isediting={isEditing}
               />
             )}
+<<<<<<< HEAD
             <Flex vertical style={{ width: '100%', bottom: 0, position: "absolute", }}>
               <Button type="primary" style={category_button} block onClick={opendilog} >
                 Open Folder
@@ -246,6 +364,11 @@ function App() {
           <Header style={headerStyle}>
             <Row>
               <Col span={12}><Dragger
+=======
+            <Flex vertical style={{ width: '100%',padding: '0 10px',bottom: 0, position: "absolute", justify:"center"}}>
+            <Dragger
+                // style={{padding:"15px 15px 0px 15px"}}
+>>>>>>> origin/master
                 width="50%"
                 name='file'
                 multiple={true}
@@ -274,21 +397,41 @@ function App() {
                 <p className="ant-upload-drag-icon">
                   <InboxOutlined />
                 </p>
-                {/* <p className="ant-upload-text">Upload</p> */}
-              </Dragger></Col>
-
-
+                <p className="ant-upload-text">Click or drag file to this area to upload to current category.</p>
+              </Dragger>
+              {!isEditing && <Button type="primary" style={category_button} block onClick={opendilog} >
+                Open Folder
+              </Button>}
+              {isEditing && <Button type="primary" style={category_button} block onClick={addfoler}>
+                Add Categroy
+              </Button>
+              }
+            </Flex>
+          </Flex>
+        </Sider>
+        <Layout>
+          <Header style={headerStyle}>
+          {contextHolder}
+            <Row>
+              <Search 
+            style={{
+              padding:"15px 15px 0px 15px"
+            }}
+            placeholder="Search articles" onSearch={onSearch} enterButton />
             </Row>
-
+            {/* <Col span={12}>
+              </Col> */}
+              {/* <Button onClick={debug}>Debug</Button> */}
           </Header>
           <Content style={contentStyle}>
             {
               <ItemList
-                items={files}
+                items={filteredFiles}
                 openFile={openFile}
                 deleteFile={deleteFile}
                 getInfo={getInfo}
                 openFileDirectory={openFileDirectory}
+                moveFile={moveFile}
               />
             }
             <Modal
@@ -310,11 +453,69 @@ function App() {
                 </Button>,
               ]}
             >
-              <MyComponent
-                currentFile={currentFile}
-                updatedFile={updatedFile}
+            <MyComponent
+              currentFile={currentFile}
+              updatedFile={updatedFile}
+              setUpdatedFile={setUpdatedFile}
+            />
+            </Modal>
+            <Modal
+              title="Move Paper"
+              open={isMove}
+              onOk={handleMove}
+              width={350}
+              onCancel={() => moveCancel(false)}
+              confirmLoading={isLoading}
+              footer={[
+                <Button key="back" onClick={moveCancel}>
+                  Cancel
+                </Button>,
+                <Button key="Comfirm" type="primary" loading={isLoading} onClick={handleOk}>
+                  Update
+                </Button>,
+              ]}
+             >
+              <Select
+                style={{
+                  width: 120,
+                }}
+                allowClear
+                value={selectedValue}
+                onChange={setSelectedValue}
+                options={folderOptions}
+              />
+             </Modal>
+             <Modal
+              title="Creating new category"
+              centered
+              open={modal2Open}
+              onOk={comfirmCreateColor}
+              width={400}
+              onCancel={() => setModal2Open(false)}
               >
-              </MyComponent>
+              <Row align="middle" gutter={[16, 16]}>
+                <Col span={8}>
+                Category Name:
+                </Col>
+                <Col span={16}>
+                <Input
+                count={{
+                  show: true,
+                  max: 12,
+                }}
+                defaultValue="New Category"
+                value={newCateName}
+                onChange={(e) => setNewCateName(e.target.value)}
+                />
+                </Col>
+                <Col span={8}>
+                Category Color:
+                </Col>
+                <Col span={16}>
+                <ColorPicker value={newColor} onChange={setnewColor} presets={presets}/>
+                </Col>
+              </Row>
+
             </Modal>
           </Content>
         </Layout>

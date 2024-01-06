@@ -5,8 +5,8 @@ env:
   
 on:
     push:
-        branches:
-          - master
+      tags:
+        - 'v*.*.*'
 
 jobs:
   release:
@@ -46,14 +46,13 @@ jobs:
             name: ${{ matrix.os }}
             path: dist/*.exe
 
-        - name: Create Tag
-          run: |
-            TAG="v$(date +'%Y.%m.%d.%H%M%S')"
-
         - name: release
           uses: softprops/action-gh-release@v1
           with:
+            tag_name: ${{ github.ref }}
+            # name: Release ${{ github.ref }}
             files: "dist/*.exe"
-            tag_name: ${{ env.TAG }}
+            draft: false
+            prerelease: false
           env:
-            GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

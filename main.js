@@ -132,7 +132,7 @@ Menu.setApplicationMenu(menu)
 function createWindow() {
   // 创建浏览器窗口
   const win = new BrowserWindow({
-    width: 1200,
+    width: 1250,
     height: 800,
     // resizable: false, // 禁止调整窗口大小
     icon: path.join(__dirname, 'assets', 'icons', 'logo.png'),
@@ -218,8 +218,22 @@ ipcMain.handle('openDialog', async () => {
 
   if (!result.canceled) {
     const folderPath = result.filePaths[0];
-    const folderContents = fs.readdirSync(folderPath, { withFileTypes: true })
-      .filter(item => item.isDirectory());
+    let folderContents = fs.readdirSync(folderPath, { withFileTypes: true })
+    .filter(item => item.isDirectory())
+    .map(dir => {
+      const subFolderPath = path.join(folderPath, dir.name);
+
+      // 计算该子目录下的 PDF 文件数量
+      const pdfCount = fs.readdirSync(subFolderPath)
+        .filter(file => file.endsWith('.pdf')).length;
+  
+      // 返回原始对象，并添加 pdfCount 属性
+      return {
+        ...dir, // 展开原有属性
+        pdfCount: pdfCount, // 添加新属性
+        color: '#1677FF',
+      };
+    });
     const config = {
       folderPath: folderPath,
       folderContents: folderContents,
@@ -275,6 +289,7 @@ ipcMain.handle('uploadFile', (event, { fileName, sourcePath, destinationPath }) 
     }
   });
 });
+<<<<<<< HEAD
 ipcMain.handle('addFolder', async (event, folderName) => {
   const new_path = path.join(folderName, "新建类别");
   try {
@@ -285,8 +300,67 @@ ipcMain.handle('addFolder', async (event, folderName) => {
   result = fs.readdirSync(folderName, { withFileTypes: true })
     .filter(item => item.isDirectory());
   return result;
+=======
+ipcMain.handle('addFolder', async (event, rootFolder, categoryName, categoryColor) => {
+  const new_path = path.join(rootFolder, categoryName);
+  fs.mkdirSync(new_path, { recursive: true });
+
+  console.log('Folder created successfully');
+
+  // 获取当前的 folderContents
+  const currentData = await new Promise((resolve, reject) => {
+    db.findOne({ _id: 'folderData' }).exec((err, doc) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(doc);
+      }
+    });
+  });
+
+  // 创建新文件夹的对象
+  const newFolder = {
+    name: categoryName,
+    path:rootFolder,
+    pdfCount: 0, // 新创建的文件夹初始 PDF 数量为 0
+    color: categoryColor || '#1677FF' // 使用指定的颜色或默认颜色
+  };
+
+  // 如果已有 folderContents，则追加新文件夹，否则创建新数组
+  const updatedFolderContents = currentData && currentData.folderContents
+    ? [...currentData.folderContents, newFolder]
+    : [newFolder];
+
+  // 更新数据库记录
+  await db.update({ _id: 'folderData' }, { $set: { folderContents: updatedFolderContents } }, { upsert: true });
+
+  // 返回更新后的文件夹列表
+  return updatedFolderContents;
+>>>>>>> origin/master
 });
 
+ipcMain.handle('deleteFolder', async (event, directory) => {
+  fs.rmdirSync(directory, { recursive: true });
+  const currentData = await new Promise((resolve, reject) => {
+    db.findOne({ _id: 'folderData' }).exec((err, doc) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(doc);
+      }
+    });
+  });
+  if (currentData && currentData.folderContents) {
+    // 获取要删除的文件夹名称（假设 directory 是完整路径）
+    const folderNameToDelete = path.basename(directory);
+
+    // 过滤掉名字匹配的项
+    const updatedFolderContents = currentData.folderContents.filter(item => item.name !== folderNameToDelete);
+    console.log(updatedFolderContents, 'updatedFolderContents',folderNameToDelete,currentData);
+    // 更新数据库记录
+    const result = await db.update({ _id: 'folderData' }, { $set: { folderContents: updatedFolderContents } }, {});
+  }
+});
 ipcMain.handle('renameFolder', async (event, { src, des }) => {
   state = fs.renameSync(src, des)
   console.log('Folder rename successfully');

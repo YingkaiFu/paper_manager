@@ -25,8 +25,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // console.log(sourcePath, destinationPath,"preload");
     return ipcRenderer.invoke('uploadFile', { fileName,sourcePath, destinationPath });
   },
-  addFolder:(folderName) => {
-    return ipcRenderer.invoke('addFolder', folderName);
+  addFolder:(rootFolder,categoryName,categroyColor) => {
+    return ipcRenderer.invoke('addFolder', rootFolder,categoryName,categroyColor);
   },
   renameFolder:(src,des) => {
     return ipcRenderer.invoke('renameFolder', {src,des});
@@ -42,6 +42,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   openFileDirectory : async(directory) => {
     const result = await ipcRenderer.invoke('openFileDirectory', directory);
+    return result;
+  },
+  deleteFolder: async(directory) => {
+    const result = await ipcRenderer.invoke('deleteFolder', directory);
     return result;
   },
 }); 

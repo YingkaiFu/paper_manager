@@ -1,12 +1,13 @@
 {
   "name": "paper_manager",
-  "version": "0.1.0",
+  "version": "v0.1.7",
   "private": true,
   "main": "./main.js",
   "author": {
     "name": "Yingkai Fu",
     "email": "Yingkai.Fu@outlook.com"
   },
+  "icon": "./assets/icons/logo.ico",
   "description": "A paper manager for researchers",
   "homepage": ".",
   "dependencies": {
@@ -73,7 +74,7 @@
       "allowToChangeInstallationDirectory": true
     },
     "win": {
-      "icon": "./build/favicon.png",
+      "icon": "./assets/icons/logo.ico",
       "target": "nsis"
     },
     "files": [
