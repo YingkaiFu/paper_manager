@@ -12,6 +12,26 @@ const { Search } = Input;
 const { TextArea } = Input;
 const { Text, Link } = Typography;
 
+
+function getBaseName(path) {
+  // 分割路径字符串
+  const parts = path.split(/[/\\]/);
+  // 返回路径的最后一部分
+  return parts[parts.length - 1];
+}
+
+function joinPath(basePath, folderName) {
+  // 检查路径是否以斜杠或反斜杠结束
+  if (basePath.endsWith('/') || basePath.endsWith('\\')) {
+      return basePath + folderName;
+  } else {
+      // 使用合适的分隔符
+      // 在 Node.js 环境中，可以使用 path.sep 获取系统特定的路径分隔符
+      const separator = basePath.includes('/') ? '/' : '\\';
+      return basePath + separator + folderName;
+  }
+}
+
 const headerStyle = {
   textAlign: 'center',
   color: '#8c8c8c',
@@ -104,7 +124,7 @@ function App() {
 
   const [Folder, setFolder] = useState([]);
   const [rootFolder, setRootFolder] = useState("");
-  const [activeFolder, setActivedFoler] = useState([]);
+  const [activeFolder, setActivedFoler] = useState("");
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isMove, setIsMove] = useState(false);
   const [currentFile, setCurrentFile] = useState(null);
@@ -123,13 +143,17 @@ function App() {
 const debug = () => {
   console.log(activeFolder);
   console.log(Folder);
+  console.log(currentFile);
 }
 
   const presets = genPresets({
     primary: generate(token.colorPrimary),
   });
 
-  const folderOptions = Folder.map(folder => ({
+  const filterOption = (input, option) =>
+  (option?.label ?? '').toLowerCase().includes(input.toLowerCase());
+
+  const folderOptions = Folder.filter(folder => joinPath(folder.path,folder.name)!== activeFolder).map(folder => ({
     value: folder.name, // 假设你想要用name作为value
     label: folder.name, // 这里也使用name作为显示的label
   }));
@@ -157,19 +181,21 @@ const debug = () => {
     const result = await window.electronAPI.addFolder(rootFolder,categoryName,categroyColor);
     setFolder(result);
     setModal2Open(false);
+    setnewColor(token.colorPrimary);
+    setNewCateName("");
   };
   
   async function showFolder(folder) {
     const result = await window.electronAPI.listFolder(folder);
     setFiles([...result]);
-    setActivedFoler([folder]);
+    setActivedFoler(folder);
   };
 
   async function onRenameClick(src, des) {
     // 更新类别的名字
     const result = await window.electronAPI.renameFolder(src, des);
     setFolder(result);
-    setActivedFoler([des]);
+    setActivedFoler(des);
   }
   async function addfoler() {
     setModal2Open(true);
@@ -184,8 +210,8 @@ const debug = () => {
     const folderPath = result.folderPath;
     const folderContents = result.folderContents;
     setFolder(folderContents);
-    setActivedFoler([folderContents[0].name])
-    showFolder(activeFolder[0]);
+    setActivedFoler(folderContents[0].name)
+    setFiles([]);
   }
   async function openFile(file) {
     const result = await window.electronAPI.openFile(file.key);
@@ -197,21 +223,34 @@ const debug = () => {
   };
   async function moveFile(file) {
     setCurrentFile(file);
-    console.log(file);
     setIsMove(true);
   };
 
-  async function moveCancel() {
+  async function handleMoveCancel() {
+    setSelectedValue(undefined);
     setIsMove(false);
   }
 
   async function deleteFile(file) {
     const result = await window.electronAPI.deleteFile(file.key);
-    showFolder(activeFolder[0]);
+    showFolder(activeFolder);
   }
 
-  const handleMove = () => {
-    
+  async function handleMove(){
+    console.log(selectedValue);
+    console.log(currentFile);
+    console.log(rootFolder);
+    const result = await window.electronAPI.moveFile(rootFolder,selectedValue,currentFile);
+    console.log(result)
+    if (result) {
+      setIsMove(false);
+      showFolder(activeFolder);
+      const result = await window.electronAPI.initFolder();
+      const folderContents = result.folderContents;
+      setFolder(folderContents);
+      messageApi.success('Move file successfully!');
+      setSelectedValue(undefined);
+    }
   }
 
   const handleOk = () => {
@@ -281,7 +320,7 @@ const debug = () => {
       if (folder) {
         const folers = await window.electronAPI.listFolder(folder);
         setFiles(folers);
-        setActivedFoler([folder]);
+        setActivedFoler(folder);
       }
       setFolder(folderContents);
       setRootFolder(folderPath);
@@ -333,7 +372,7 @@ const debug = () => {
                 name='file'
                 multiple={true}
                 customRequest={({ file, onSuccess }) => {
-                  const result = window.electronAPI.uploadFile(file.name, file.path, activeFolder[0]);
+                  const result = window.electronAPI.uploadFile(file.name, file.path, activeFolder);
                   setTimeout(() => {
                     onSuccess("ok");
                   }, 0);
@@ -344,7 +383,7 @@ const debug = () => {
                     console.log(info.file, info.fileList);
                   }
                   if (status === 'done') {
-                    showFolder(activeFolder[0]);
+                    showFolder(activeFolder);
                     message.success(`${info.file.name} file uploaded successfully.`);
                   } else if (status === 'error') {
                     message.error(`${info.file.name} file upload failed.`);
@@ -420,26 +459,29 @@ const debug = () => {
             />
             </Modal>
             <Modal
-              title="Move Paper"
+              title="Move Paper to"
               open={isMove}
               onOk={handleMove}
               width={350}
-              onCancel={() => moveCancel(false)}
+              onCancel={handleMoveCancel}
               confirmLoading={isLoading}
               footer={[
-                <Button key="back" onClick={moveCancel}>
+                <Button key="back" onClick={handleMoveCancel}>
                   Cancel
                 </Button>,
-                <Button key="Comfirm" type="primary" loading={isLoading} onClick={handleOk}>
+                <Button key="Comfirm" type="primary" loading={isLoading} onClick={handleMove}>
                   Update
                 </Button>,
               ]}
              >
               <Select
                 style={{
-                  width: 120,
+                  width: 300,
                 }}
-                allowClear
+                showSearch
+                placeholder="Select a new categroy"
+                optionFilterProp="children"
+                onSearch={onSearch}
                 value={selectedValue}
                 onChange={setSelectedValue}
                 options={folderOptions}

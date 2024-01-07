@@ -258,6 +258,51 @@ ipcMain.handle('initFolder', async () => {
   });
 });
 
+ipcMain.handle('moveFile', async (event, { rootFolder, selectedValue, currentFile }) => {
+  return new Promise((resolve, reject) => {
+    const new_path = path.join(rootFolder, selectedValue);
+    const old_path = currentFile.path;
+    const new_name = path.join(new_path, path.basename(old_path));
+
+    fs.rename(old_path, new_name, (err) => {
+      if (err) {
+        console.log(err);
+        resolve(false);  // 使用 resolve 而不是 return
+      }
+      else {
+        console.log("File moved successfully");
+        db.findOne({ _id: 'folderData' }, (err, folderData) => {
+          if (err) {
+            console.log('Error reading from DB:', err);
+            resolve(false);
+          } else {
+            // 更新 folderContents 中的 pdfCount
+            const updatedFolderContents = folderData.folderContents.map(folder => {
+              if (folder.name === path.basename(path.dirname(old_path))) {
+                return { ...folder, pdfCount: folder.pdfCount - 1 }; // 减去 1
+              }
+              if (folder.name === selectedValue) {
+                return { ...folder, pdfCount: (folder.pdfCount || 0) + 1 }; // 加上 1
+              }
+              return folder;
+            });
+
+            // 更新数据库
+            db.update({ _id: 'folderData' }, { $set: { folderContents: updatedFolderContents } }, { upsert: true }, (dbErr) => {
+              if (dbErr) {
+                console.log('Error updating folderData in DB:', dbErr);
+                resolve(false);
+              } else {
+                resolve(true);
+              }
+            });
+          }
+        });
+      }
+    });
+  });
+});
+
 ipcMain.handle('openFile', async (event, filePath) => {
   shell.openPath(filePath).then(response => {
     if (response) {

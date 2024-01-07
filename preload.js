@@ -48,4 +48,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const result = await ipcRenderer.invoke('deleteFolder', directory);
     return result;
   },
+  moveFile: async(rootFolder,selectedValue,currentFile) => {
+    const result = await ipcRenderer.invoke('moveFile', {rootFolder,selectedValue,currentFile});
+    return result;
+  }
 }); 

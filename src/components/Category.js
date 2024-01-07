@@ -11,6 +11,21 @@ function renameFolderPath(originalPath, newName) {
   return originalPath.substring(0, lastBackslashIndex + 1) + newName;
 }
 
+const getColorValue = (category) => {
+  if (category && category.color && typeof category.color === 'string') {
+    return category.color;
+  }
+  else if (
+    category &&
+    category.color &&
+    category.color.metaColor &&
+    category.color.metaColor.originalInput &&
+    typeof category.color.metaColor.originalInput === 'string'
+  ) {
+    return category.color.metaColor.originalInput;
+  }
+}
+
 const Category = ({ categorys, clickFoler, onRenameClick, onDeleteClick,activeFolder, isediting}) => {
 
   const [editingKey, setEditingKey] = useState(null);
@@ -40,7 +55,6 @@ const Category = ({ categorys, clickFoler, onRenameClick, onDeleteClick,activeFo
   return (
     <Menu
       mode="inline"
-      defaultSelectedKeys={activeFolder}
       onClick={(e) => {
         if (editingKey !== e.key) {
           clickFoler(e);
@@ -72,7 +86,7 @@ const Category = ({ categorys, clickFoler, onRenameClick, onDeleteClick,activeFo
                   display: 'inline-block',
                   width: '10px', // 颜色区域的宽度
                   height: '30px', // 颜色区域的高度
-                  backgroundColor: category.color, // 设置背景颜色为 category 的颜色
+                  backgroundColor: getColorValue(category), // 设置背景颜色为 category 的颜色
                   marginRight: '5px', // 右侧的间隔
                   verticalAlign: 'middle', // 垂直对齐
                 }}></span>
