@@ -28,8 +28,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addFolder:(rootFolder,categoryName,categroyColor) => {
     return ipcRenderer.invoke('addFolder', rootFolder,categoryName,categroyColor);
   },
-  renameFolder:(src,des) => {
-    return ipcRenderer.invoke('renameFolder', {src,des});
+  renameFolder:(src,des,color) => {
+    return ipcRenderer.invoke('renameFolder', {src,des,color});
   },
   readArxiv: async (directory) => {
     console.log(directory)

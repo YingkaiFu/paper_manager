@@ -11,19 +11,68 @@ function renameFolderPath(originalPath, newName) {
   return originalPath.substring(0, lastBackslashIndex + 1) + newName;
 }
 
-const getColorValue = (category) => {
-  if (category && category.color && typeof category.color === 'string') {
-    return category.color;
+const getColorValue = (color) => {
+  if (color && typeof color === 'string') {
+    return color;
   }
   else if (
-    category &&
-    category.color &&
-    category.color.metaColor &&
-    category.color.metaColor.originalInput &&
-    typeof category.color.metaColor.originalInput === 'string'
+    color &&
+    color.metaColor  &&
+    color.metaColor.originalInput
   ) {
-    return category.color.metaColor.originalInput;
+
+    if (typeof color.metaColor.originalInput === 'string'){
+      return color.metaColor.originalInput;}
+      else{
+
+    const originalInput = color.metaColor.originalInput;
+    const toHex = c => {
+      const hex = Math.round(c).toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+
+
+    // HSAV 到 RGBA 的转换
+    const hsvToRgb = (h, s, v) => {
+      let r, g, b, i, f, p, q, t;
+      if (s === 0) {
+        r = g = b = v;
+      } else {
+        h /= 60;
+        i = Math.floor(h);
+        f = h - i;
+        p = v * (1 - s);
+        q = v * (1 - s * f);
+        t = v * (1 - s * (1 - f));
+        switch (i) {
+          case 0: r = v; g = t; b = p; break;
+          case 1: r = q; g = v; b = p; break;
+          case 2: r = p; g = v; b = t; break;
+          case 3: r = p; g = q; b = v; break;
+          case 4: r = t; g = p; b = v; break;
+          default: r = v; g = p; b = q; break;
+        }
+      }
+      return [r * 255, g * 255, b * 255];
+    };
+
+    let r, g, b;
+    if ('h' in originalInput && 's' in originalInput && 'v' in originalInput) {
+      // HSAV 格式
+      [r, g, b] = hsvToRgb(originalInput.h, originalInput.s, originalInput.v);
+    } else if ('r' in originalInput && 'g' in originalInput && 'b' in originalInput) {
+      // RGB 格式
+      r = originalInput.r * 255;
+      g = originalInput.g * 255;
+      b = originalInput.b * 255;
+    } else {
+      return null; // 格式不正确
+    }
+
+
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
+}
 }
 
 const Category = ({ categorys, clickFoler, onRenameClick, onDeleteClick,activeFolder, isediting}) => {
@@ -33,8 +82,7 @@ const Category = ({ categorys, clickFoler, onRenameClick, onDeleteClick,activeFo
 
   const handleEdit = (category) => {
     const key = category.path + "\\" + category.name;
-    setEditingKey(key);
-    setEditingName(category.name);
+    onRenameClick(key, category.name,getColorValue(category.color));
   };
 
   const handleSave = (key) => {
@@ -66,27 +114,14 @@ const Category = ({ categorys, clickFoler, onRenameClick, onDeleteClick,activeFo
           const isEditing = editingKey === category.path + "\\" + category.name;
           return {
             key: category.path + "\\" + category.name,
-            label: isEditing ? (
-              <Input
-                value={editingName}
-                onChange={(e) => setEditingName(e.target.value)}
-                onPressEnter={() => handleSave(category.path + "\\" + category.name)}
-                onBlur={() => handleSave(category.path + "\\" + category.name)}
-                addonAfter={
-                  <span>
-                    <CheckOutlined onClick={() => handleSave(category.path + "\\" + category.name)} />
-                    <CloseOutlined onClick={handleCancelEdit} style={{ marginLeft: 10 }} />
-                  </span>
-                }
-              />
-            ) : (
+            label:  (
               <Row justify="space-between" align="left">
                 <Col>
                 <span style={{
                   display: 'inline-block',
                   width: '10px', // 颜色区域的宽度
                   height: '30px', // 颜色区域的高度
-                  backgroundColor: getColorValue(category), // 设置背景颜色为 category 的颜色
+                  backgroundColor: getColorValue(category.color), // 设置背景颜色为 category 的颜色
                   marginRight: '5px', // 右侧的间隔
                   verticalAlign: 'middle', // 垂直对齐
                 }}></span>

@@ -1,17 +1,79 @@
 import './App.css';
 import React, { useState, useEffect } from 'react';
-import { Layout, Space, Button, Flex, Table, Upload, message, Input, Drawer, Modal, Row, Col, Typography,ColorPicker,theme,Form,Select } from 'antd';
-import { InboxOutlined,FolderAddOutlined } from '@ant-design/icons';
-import { generate, green, presetPalettes, red } from '@ant-design/colors';
-import { ColorFactory } from 'antd/es/color-picker/color.js';
+import { Layout, Button, Flex, Upload, message, Input, Modal, Row, Col, Typography,ColorPicker,theme,Select } from 'antd';
+import { InboxOutlined } from '@ant-design/icons';
+import { generate, presetPalettes } from '@ant-design/colors';
 import Category from './components/Category.js';
 import ItemList from './components/ItemList.js';
-const { Header, Footer, Sider, Content } = Layout;
+const { Header, Sider, Content } = Layout;
 const { Dragger } = Upload;
 const { Search } = Input;
 const { TextArea } = Input;
-const { Text, Link } = Typography;
 
+
+const getColorValue = (color) => {
+  if (color && typeof color === 'string') {
+    return color;
+  }
+  else if (
+    color &&
+    color.metaColor  &&
+    color.metaColor.originalInput
+  ) {
+
+    if (typeof color.metaColor.originalInput === 'string'){
+      return color.metaColor.originalInput;}
+      else{
+
+    const originalInput = color.metaColor.originalInput;
+    const toHex = c => {
+      const hex = Math.round(c).toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+
+
+    // HSAV 到 RGBA 的转换
+    const hsvToRgb = (h, s, v) => {
+      let r, g, b, i, f, p, q, t;
+      if (s === 0) {
+        r = g = b = v;
+      } else {
+        h /= 60;
+        i = Math.floor(h);
+        f = h - i;
+        p = v * (1 - s);
+        q = v * (1 - s * f);
+        t = v * (1 - s * (1 - f));
+        switch (i) {
+          case 0: r = v; g = t; b = p; break;
+          case 1: r = q; g = v; b = p; break;
+          case 2: r = p; g = v; b = t; break;
+          case 3: r = p; g = q; b = v; break;
+          case 4: r = t; g = p; b = v; break;
+          default: r = v; g = p; b = q; break;
+        }
+      }
+      return [r * 255, g * 255, b * 255];
+    };
+
+    let r, g, b;
+    if ('h' in originalInput && 's' in originalInput && 'v' in originalInput) {
+      // HSAV 格式
+      [r, g, b] = hsvToRgb(originalInput.h, originalInput.s, originalInput.v);
+    } else if ('r' in originalInput && 'g' in originalInput && 'b' in originalInput) {
+      // RGB 格式
+      r = originalInput.r * 255;
+      g = originalInput.g * 255;
+      b = originalInput.b * 255;
+    } else {
+      return null; // 格式不正确
+    }
+
+
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  }
+}
+}
 
 function getBaseName(path) {
   // 分割路径字符串
@@ -139,11 +201,14 @@ function App() {
   const [newColor, setnewColor] = useState(token.colorPrimary);
   const [newCateName, setNewCateName] = useState("");
   const [selectedValue, setSelectedValue] = useState(undefined);
+  const [editmodalOpen, setEditmodalOpen] = useState(false);
+  const [editCateName, setEditCateName] = useState("");
+
 
 const debug = () => {
   console.log(activeFolder);
-  console.log(Folder);
-  console.log(currentFile);
+  // console.log(Folder);
+  // console.log(currentFile);
 }
 
   const presets = genPresets({
@@ -185,20 +250,35 @@ const debug = () => {
     setNewCateName("");
   };
   
+  async function comfirmEdit(){
+    const color = newColor;
+    const src = joinPath(rootFolder,newCateName);
+    const des = joinPath(rootFolder,editCateName);
+    const result = await window.electronAPI.renameFolder(src, des,getColorValue(color));
+    setFolder(result);
+    setActivedFoler(des);
+    setEditmodalOpen(false);
+    setnewColor(token.colorPrimary);
+    setNewCateName("");
+  }
   async function showFolder(folder) {
     const result = await window.electronAPI.listFolder(folder);
     setFiles([...result]);
     setActivedFoler(folder);
   };
 
-  async function onRenameClick(src, des) {
-    // 更新类别的名字
-    const result = await window.electronAPI.renameFolder(src, des);
-    setFolder(result);
-    setActivedFoler(des);
-  }
+
   async function addfoler() {
+    setnewColor(token.colorPrimary);
+    setNewCateName("");
     setModal2Open(true);
+  };
+
+  async function editFolder(key, name, color) {
+    setNewCateName(name);
+    setEditCateName(name);
+    setnewColor(color);
+    setEditmodalOpen(true);
   };
   async function deleteFolder(folder_name){
     await window.electronAPI.deleteFolder(folder_name);
@@ -359,7 +439,7 @@ const debug = () => {
               <Category
                 categorys={Folder}
                 clickFoler={(id) => { showFolder(id.key); }}
-                onRenameClick={(src, des) => { onRenameClick(src, des); }}
+                onRenameClick={editFolder}
                 onDeleteClick={deleteFolder}
                 activeFolder={activeFolder}
                 isediting={isEditing}
@@ -420,7 +500,7 @@ const debug = () => {
             </Row>
             {/* <Col span={12}>
               </Col> */}
-              {/* <Button onClick={debug}>Debug</Button> */}
+              <Button onClick={debug}>Debug</Button>
           </Header>
           <Content style={contentStyle}>
             {
@@ -508,6 +588,38 @@ const debug = () => {
                 defaultValue="New Category"
                 value={newCateName}
                 onChange={(e) => setNewCateName(e.target.value)}
+                />
+                </Col>
+                <Col span={8}>
+                Category Color:
+                </Col>
+                <Col span={16}>
+                <ColorPicker value={newColor} onChange={setnewColor} presets={presets}/>
+                </Col>
+              </Row>
+
+            </Modal>
+            <Modal
+              title="Edit category"
+              centered
+              open={editmodalOpen}
+              onOk={comfirmEdit}
+              width={400}
+              onCancel={() => setEditmodalOpen(false)}
+              >
+              <Row align="middle" gutter={[16, 16]}>
+                <Col span={8}>
+                Category Name:
+                </Col>
+                <Col span={16}>
+                <Input
+                count={{
+                  show: true,
+                  max: 12,
+                }}
+                defaultValue="New Category"
+                value={editCateName}
+                onChange={(e) => setEditCateName(e.target.value)}
                 />
                 </Col>
                 <Col span={8}>

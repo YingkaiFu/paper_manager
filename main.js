@@ -11,7 +11,6 @@ const { PDFDocument } = require('pdf-lib');
 const Datastore = require('nedb');
 const isMac = process.platform === 'darwin';
 
-
 function isArxivFileName(fileName) {
   // arXiv 文件名格式，可能包含版本号，如 "2104.00001v1"
   const arxivRegex = /^\d{4}\.\d{4,5}(v\d+)?$/;
@@ -393,14 +392,52 @@ ipcMain.handle('deleteFolder', async (event, directory) => {
     const result = await db.update({ _id: 'folderData' }, { $set: { folderContents: updatedFolderContents } }, {});
   }
 });
-ipcMain.handle('renameFolder', async (event, { src, des }) => {
+ipcMain.handle('renameFolder', async (event, { src, des,color }) => {
   state = fs.renameSync(src, des)
   console.log('Folder rename successfully');
-  result = fs.readdirSync(path.dirname(src), { withFileTypes: true })
-    .filter(item => item.isDirectory());
-  db.update({ _id: 'folderData' }, { $set: { folderContents: result } }, { upsert: true });
-  db.update({ _id: 'folderData' }, { $set: { lastfolder: des } }, { upsert: true });
-  return result;
+  const folderData = await new Promise((resolve, reject) => {
+    db.findOne({ _id: 'folderData' }, (err, doc) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(doc);
+      }
+    });
+  });
+
+  // 检查 folderContents 是否存在并更新指定项
+  if (folderData && folderData.folderContents) {
+    const folderContents = folderData.folderContents.map(item => {
+      if (item.name === path.basename(src)) {
+        return { ...item, name: path.basename(des), color: color }; // 更新路径和颜色
+      }
+      return item;
+    });
+    // 更新数据库中的 folderContents
+    await new Promise((resolve, reject) => {
+      db.update({ _id: 'folderData' }, { $set: { folderContents: folderContents } }, { upsert: true }, (err, numReplaced) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(numReplaced);
+        }
+      });
+    });
+
+    // 更新 lastfolder
+    await new Promise((resolve, reject) => {
+      db.update({ _id: 'folderData' }, { $set: { lastfolder: des } }, { upsert: true }, (err, numReplaced) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(numReplaced);
+        }
+      });
+    });
+    console.log(folderContents);
+
+    return folderData ? folderContents : [];
+  }
 });
 
 ipcMain.handle('openFileDirectory', async (event, directory) => {
