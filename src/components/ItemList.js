@@ -1,41 +1,62 @@
-import React, { useState } from 'react';
-import { Space, Table, Tag, Pagination, Tooltip, Drawer, Popconfirm } from 'antd';
+import React, { useState } from "react";
+import {
+  Space,
+  Table,
+  Tag,
+  Pagination,
+  Tooltip,
+  Drawer,
+  Popconfirm,
+} from "antd";
 import {
   DeleteOutlined,
   CloudUploadOutlined,
   FolderOpenOutlined,
   ScissorOutlined,
-} from '@ant-design/icons';
+} from "@ant-design/icons";
 
-
-const createColumns = (openFile, deleteFile, getInfo, openFileDirectory,moveFile) => [
+const createColumns = (
+  openFile,
+  deleteFile,
+  getInfo,
+  openFileDirectory,
+  moveFile
+) => [
   {
-    title: 'Name',
-    dataIndex: 'title',
-    key: 'title',
-    render: (_, record) => <a onClick={() => { openFile(record); }}>{record.title}</a>,
+    title: "Name",
+    dataIndex: "title",
+    key: "title",
+    render: (_, record) => (
+      <a
+        onClick={() => {
+          openFile(record);
+        }}
+      >
+        {record.title}
+      </a>
+    ),
     sorter: (a, b) => a.title.localeCompare(b.title),
     width: 380,
   },
   {
-    title: 'Journal',
-    dataIndex: 'journal',
-    key: 'journal',
+    title: "Journal",
+    dataIndex: "journal",
+    key: "journal",
     width: 90,
   },
   {
-    title: 'Year',
-    dataIndex: 'year',
-    key: 'year',
+    title: "Year",
+    dataIndex: "year",
+    key: "year",
     // defaultSortOrder: 'descend',
     sorter: (a, b) => a.year.localeCompare(b.year),
     width: 90,
   },
   {
-    title: 'Authors',
-    dataIndex: 'authors',
-    key: 'authors',
-    defaultSortOrder: 'descend',
+    title: "Authors",
+    dataIndex: "authors",
+    key: "authors",
+    defaultSortOrder: "descend",
     ellipsis: {
       showTitle: false,
     },
@@ -48,14 +69,16 @@ const createColumns = (openFile, deleteFile, getInfo, openFileDirectory,moveFile
   },
   Table.EXPAND_COLUMN,
   {
-    title: 'Action',
-    key: 'action',
+    title: "Action",
+    key: "action",
     render: (_, record) => (
       <Space size="middle">
         <Tooltip placement="top" title="更新">
-          <CloudUploadOutlined onClick={() => {
-            getInfo(record);
-          }} />
+          <CloudUploadOutlined
+            onClick={() => {
+              getInfo(record);
+            }}
+          />
         </Tooltip>
         <Tooltip placement="top" title="删除">
           <Popconfirm
@@ -69,14 +92,18 @@ const createColumns = (openFile, deleteFile, getInfo, openFileDirectory,moveFile
           </Popconfirm>
         </Tooltip>
         <Tooltip placement="top" title="打开文件夹">
-          <FolderOpenOutlined onClick={() => {
-            openFileDirectory(record);
-          }} />
+          <FolderOpenOutlined
+            onClick={() => {
+              openFileDirectory(record);
+            }}
+          />
         </Tooltip>
         <Tooltip placement="top" title="移动">
-          <ScissorOutlined onClick={() => {
-            moveFile(record);
-          }} />
+          <ScissorOutlined
+            onClick={() => {
+              moveFile(record);
+            }}
+          />
         </Tooltip>
       </Space>
     ),
@@ -84,44 +111,60 @@ const createColumns = (openFile, deleteFile, getInfo, openFileDirectory,moveFile
 ];
 const rowSelection = {
   onChange: (selectedRowKeys, selectedRows) => {
-    console.log(`selectedRowKeys: ${selectedRowKeys}`, 'selectedRows: ', selectedRows);
+    console.log(
+      `selectedRowKeys: ${selectedRowKeys}`,
+      "selectedRows: ",
+      selectedRows
+    );
   },
   getCheckboxProps: (record) => ({
-    disabled: record.name === 'Disabled User',
+    disabled: record.name === "Disabled User",
     // Column configuration not to be checked
     name: record.name,
   }),
 };
 
-const ItemList = ({ items, openFile, deleteFile, getInfo, openFileDirectory,moveFile }) => {
-  const [selectionType, setSelectionType] = useState('checkbox');
-  const columns = createColumns(openFile, deleteFile, getInfo, openFileDirectory,moveFile);
+const ItemList = ({
+  items,
+  openFile,
+  deleteFile,
+  getInfo,
+  openFileDirectory,
+  moveFile,
+}) => {
+  const [selectionType, setSelectionType] = useState("checkbox");
+  const columns = createColumns(
+    openFile,
+    deleteFile,
+    getInfo,
+    openFileDirectory,
+    moveFile
+  );
   return (
     <Table
-    rowSelection={{
-      type: selectionType,
-      ...rowSelection,
-    }}
+      rowSelection={{
+        type: selectionType,
+        ...rowSelection,
+      }}
       columns={columns}
       dataSource={items}
       bordered
-      pagination={
-        {
-          total: items.length,
-          showTotal: (total) => `Total ${total} items`,
-          defaultPageSize: 30,
-          pageSize: 7,
-          defaultCurrent: 1
-        }
-      }
+      pagination={{
+        total: items.length,
+        showTotal: (total) => `Total ${total} items`,
+        defaultPageSize: 30,
+        pageSize: 7,
+        defaultCurrent: 1,
+      }}
       scroll={{
         y: 500,
       }}
       // onChange={onChange}
       expandable={{
-        expandedRowRender: (record) => <p style={{ margin: 0 }}>{record.summary}</p>,
+        expandedRowRender: (record) => (
+          <p style={{ margin: 0 }}>{record.summary}</p>
+        ),
       }}
-
     />
   );
 };
