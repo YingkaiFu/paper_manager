@@ -11,6 +11,7 @@
 | `openFile` | `openFile` |
 | `deleteFile` | `deleteFile` |
 | `uploadFile` | `uploadFile` |
+| `downloadPdfFromUrl` | `downloadPdfFromUrl` |
 | `readPdf` | `readpdf` |
 | `saveFileMetadata` | `saveFileMetadata` |
 | `openFileDirectory` | `openFileDirectory` |

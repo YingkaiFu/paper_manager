@@ -10,7 +10,8 @@ All channels use `ipcRenderer.invoke` from the preload script and `ipcMain.handl
 | `setLastUploadDir` | `dirPath: string` | Persists `lastUploadDir` in `folderData`. Returns `true`. |
 | `openFile` | `filePath: string` | Opens default application for the PDF. |
 | `deleteFile` | `filePath: string` | `boolean` — deletes the file from disk and removes its NeDB row. |
-| `uploadFile` | `{ fileName, sourcePath, destinationPath }` | `boolean` — copies into `destinationPath` (mkdir `-p` style). |
+| `uploadFile` | `{ fileName, sourcePath, destinationPath }` | `{ ok: boolean, destPath?: string, error?: string }` — copies into `destinationPath` (mkdir `-p` style). `destPath` is the saved PDF path. |
+| `downloadPdfFromUrl` | `{ rootPath, destinationDir, url }` | `{ ok: boolean, destPath?: string, error?: string }` — HTTP(S) GET, must be a PDF (`%PDF-` magic). Writes under `destinationDir` (must stay under `rootPath`). Picks filename from `Content-Disposition` or URL path; avoids collisions with `_n` suffix. |
 | `openFileDirectory` | `path: string` | If `path` is a **directory**, opens it in the system file manager (`shell.openPath`). If it is a **file**, reveals it in the parent folder (`shell.showItemInFolder`). |
 | `createFolder` | `{ rootPath, parentPath, name }` | `{ ok: boolean, error?: string, createdPath?: string }` — creates one directory under `parentPath` (must stay under `rootPath`). On success, `createdPath` is the new folder’s absolute path. |
 | `renameEntry` | `{ rootPath, oldPath, newBaseName }` | `{ ok: boolean, error?: string }` — renames file or folder (basename only); cannot rename the library root. PDFs and subtree paths are migrated in NeDB after renames. |

@@ -573,11 +573,98 @@ ipcMain.handle(
   async (event, { fileName, sourcePath, destinationPath }) => {
     try {
       await fsPromises.mkdir(destinationPath, { recursive: true });
-      await fsPromises.cp(sourcePath, path.join(destinationPath, fileName));
-      return true;
+      const destPath = path.join(destinationPath, fileName);
+      await fsPromises.cp(sourcePath, destPath);
+      return { ok: true, destPath };
     } catch (err) {
       console.error("File copy failed:", err);
-      return false;
+      return { ok: false, error: err.message || String(err) };
+    }
+  }
+);
+
+function sanitizeDownloadFileName(name) {
+  const raw = String(name || "download.pdf").trim() || "download.pdf";
+  const base = path.basename(raw);
+  const cleaned = base.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 200);
+  return cleaned || "download.pdf";
+}
+
+function parseFilenameFromContentDisposition(cd) {
+  if (!cd || typeof cd !== "string") return null;
+  const star = /filename\*\s*=\s*([^']*)''([^;]+)/i.exec(cd);
+  if (star) {
+    try {
+      return decodeURIComponent(star[2].trim());
+    } catch {
+      return null;
+    }
+  }
+  const plain = /filename\s*=\s*("?)([^";\n]+)\1/i.exec(cd);
+  return plain ? plain[2].trim() : null;
+}
+
+ipcMain.handle(
+  "downloadPdfFromUrl",
+  async (event, { rootPath, destinationDir, url }) => {
+    if (!rootPath || !destinationDir || !url || typeof url !== "string") {
+      return { ok: false, error: "Missing arguments" };
+    }
+    if (!isUnderRoot(rootPath, destinationDir)) {
+      return { ok: false, error: "Invalid destination" };
+    }
+    let parsed;
+    try {
+      parsed = new URL(url.trim());
+    } catch {
+      return { ok: false, error: "Invalid URL" };
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { ok: false, error: "Only http(s) URLs are allowed" };
+    }
+    try {
+      const response = await axios.get(parsed.href, {
+        ...axiosCommon,
+        responseType: "arraybuffer",
+        maxContentLength: 80 * 1024 * 1024,
+        maxBodyLength: 80 * 1024 * 1024,
+      });
+      let fileName = parseFilenameFromContentDisposition(
+        response.headers["content-disposition"] ||
+          response.headers["Content-Disposition"]
+      );
+      if (fileName) fileName = sanitizeDownloadFileName(fileName);
+      if (!fileName) {
+        const seg = path.basename(parsed.pathname || "");
+        if (seg && /\.pdf$/i.test(seg)) fileName = sanitizeDownloadFileName(seg);
+      }
+      if (!fileName || !fileName.toLowerCase().endsWith(".pdf")) {
+        fileName = "download.pdf";
+      }
+      const destDir = path.resolve(destinationDir);
+      await fsPromises.mkdir(destDir, { recursive: true });
+      let destPath = path.join(destDir, fileName);
+      let n = 0;
+      while (fs.existsSync(destPath)) {
+        n += 1;
+        const ext = path.extname(fileName);
+        const stem = path.basename(fileName, ext);
+        destPath = path.join(destDir, `${stem}_${n}${ext}`);
+      }
+      const buf = Buffer.from(response.data);
+      const head = buf.slice(0, 5).toString("ascii");
+      if (buf.length < 5 || head !== "%PDF-") {
+        return { ok: false, error: "Response is not a PDF file" };
+      }
+      await fsPromises.writeFile(destPath, buf);
+      if (!isUnderRoot(rootPath, destPath)) {
+        await fsPromises.unlink(destPath).catch(() => {});
+        return { ok: false, error: "Invalid target path" };
+      }
+      return { ok: true, destPath };
+    } catch (e) {
+      console.error("downloadPdfFromUrl:", e);
+      return { ok: false, error: e.message || String(e) };
     }
   }
 );

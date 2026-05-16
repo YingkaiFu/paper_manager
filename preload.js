@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteFile: (filePath) => ipcRenderer.invoke("deleteFile", filePath),
   uploadFile: (fileName, sourcePath, destinationPath) =>
     ipcRenderer.invoke("uploadFile", { fileName, sourcePath, destinationPath }),
+  downloadPdfFromUrl: (payload) =>
+    ipcRenderer.invoke("downloadPdfFromUrl", payload),
   readPdf: (filePath) => ipcRenderer.invoke("readpdf", filePath),
   saveFileMetadata: (file) => ipcRenderer.invoke("saveFileMetadata", file),
   openFileDirectory: (filePath) =>

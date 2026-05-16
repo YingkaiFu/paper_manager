@@ -59,3 +59,26 @@
 .app-file-browser .ant-upload-text {
   text-align: left;
 }
+
+/* Upload modal: compact drag area */
+.upload-modal-dragger.ant-upload.ant-upload-drag {
+  padding: 10px 8px;
+}
+
+.upload-modal-dragger .ant-upload-drag-icon {
+  margin-bottom: 2px;
+}
+
+.upload-modal-dragger .ant-upload-drag-icon .anticon {
+  font-size: 26px;
+}
+
+.upload-modal-dragger .ant-upload-text {
+  font-size: 12px;
+  margin: 0 0 2px;
+}
+
+.upload-modal-dragger .ant-upload-hint {
+  font-size: 11px;
+  line-height: 1.35;
+}

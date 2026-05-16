@@ -167,6 +167,16 @@ function fileBaseName(p) {
   return i >= 0 ? s.slice(i + 1) : s;
 }
 
+/** PDF stem (no extension) from a full path. */
+function pdfStemFromPath(p) {
+  return fileBaseName(p).replace(/\.pdf$/i, "");
+}
+
+/** Same rule as main `isArxivFileName` (stem only). */
+function isArxivStem(stem) {
+  return /^\d{4}\.\d{4,5}(v\d+)?$/i.test(stem);
+}
+
 function App() {
   const [rootPath, setRootPath] = useState("");
   const [treeData, setTreeData] = useState([]);
@@ -205,6 +215,16 @@ function App() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadModalDestDir, setUploadModalDestDir] = useState("");
   const [uploadPickerExpanded, setUploadPickerExpanded] = useState([]);
+  const [uploadUrl, setUploadUrl] = useState("");
+  const [uploadUrlLoading, setUploadUrlLoading] = useState(false);
+  const [uploadPanelPath, setUploadPanelPath] = useState("");
+  const [uploadPanelForm, setUploadPanelForm] = useState({
+    title: "",
+    authors: "",
+    year: "",
+    journal: "",
+  });
+  const [uploadMetaLoading, setUploadMetaLoading] = useState(false);
 
   const applyLibrary = useCallback((payload) => {
     if (!payload?.rootPath) return;
@@ -549,7 +569,111 @@ function App() {
     setUploadPickerExpanded(
       Array.from(new Set([...defaultExpandKeys(uploadPickerTree, 8)]))
     );
+    setUploadUrl("");
+    setUploadPanelPath("");
+    setUploadPanelForm({ title: "", authors: "", year: "", journal: "" });
   }, [uploadModalOpen, rootPath, uploadPickerTree]);
+
+  async function hydrateUploadPanelAfterFile(destPath) {
+    const stem = pdfStemFromPath(destPath);
+    if (isArxivStem(stem)) {
+      setUploadMetaLoading(true);
+      try {
+        const row = await window.electronAPI.readPdf(destPath);
+        if (row) {
+          setUploadPanelForm({
+            title: row.title || "",
+            authors: row.authors || "",
+            year: row.year || "",
+            journal: row.journal || "",
+          });
+        } else {
+          setUploadPanelForm({
+            title: stem,
+            authors: "",
+            year: "",
+            journal: "",
+          });
+          messageApi.warning("Could not fetch arXiv metadata for this file.");
+        }
+      } catch (e) {
+        console.error(e);
+        setUploadPanelForm({ title: stem, authors: "", year: "", journal: "" });
+        messageApi.error("Metadata fetch failed.");
+      } finally {
+        setUploadMetaLoading(false);
+      }
+    } else {
+      setUploadMetaLoading(false);
+      setUploadPanelForm({
+        title: stem.replace(/[-_]+/g, " ").trim() || stem,
+        authors: "",
+        year: "",
+        journal: "",
+      });
+    }
+  }
+
+  async function saveUploadPanelMetadata() {
+    if (!uploadPanelPath) {
+      messageApi.warning("Upload or download a PDF first.");
+      return;
+    }
+    const name = fileBaseName(uploadPanelPath);
+    const stem = pdfStemFromPath(uploadPanelPath);
+    const row = {
+      path: uploadPanelPath,
+      key: uploadPanelPath,
+      name,
+      originalname: name,
+      filename: stem,
+      title: uploadPanelForm.title.trim() || stem,
+      authors: uploadPanelForm.authors.trim(),
+      year: uploadPanelForm.year.trim(),
+      journal: uploadPanelForm.journal.trim(),
+      summary: "",
+      updatedFlag: true,
+    };
+    const ok = await window.electronAPI.saveFileMetadata(row);
+    if (ok) {
+      messageApi.success("Metadata saved.");
+      await refreshFromDisk();
+    } else {
+      messageApi.error("Save failed.");
+    }
+  }
+
+  async function handleDownloadPdfFromUrl() {
+    const u = uploadUrl.trim();
+    if (!u) {
+      messageApi.warning("Enter a download link.");
+      return;
+    }
+    if (!rootPath || !uploadModalDestDir) return;
+    setUploadUrlLoading(true);
+    try {
+      const r = await window.electronAPI.downloadPdfFromUrl({
+        rootPath,
+        destinationDir: uploadModalDestDir,
+        url: u,
+      });
+      if (r?.ok && r.destPath) {
+        messageApi.success("Downloaded.");
+        setUploadUrl("");
+        window.electronAPI.setLastUploadDir(uploadModalDestDir);
+        setUploadPanelPath(r.destPath);
+        await hydrateUploadPanelAfterFile(r.destPath);
+        await refreshFromDisk();
+      } else {
+        messageApi.error(r?.error || "Download failed.");
+      }
+    } catch (e) {
+      console.error(e);
+      messageApi.error("Download failed.");
+    } finally {
+      setUploadUrlLoading(false);
+    }
+  }
 
   async function submitNewFolder() {
     const name = newFolderName.trim();
@@ -1013,16 +1137,21 @@ function App() {
       <Modal
         title="Upload files"
         open={uploadModalOpen}
-        onCancel={() => setUploadModalOpen(false)}
+        onCancel={() => {
+          setUploadModalOpen(false);
+          setUploadUrl("");
+          setUploadPanelPath("");
+          setUploadPanelForm({ title: "", authors: "", year: "", journal: "" });
+        }}
         footer={null}
-        width={560}
+        width={580}
         destroyOnHidden
       >
         <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
-          Choose the library folder to receive uploads (library root or any subfolder).
-          This choice is only used in this window and does not follow the sidebar selection.
+          Choose the library folder to receive files (library root or any subfolder). This
+          window does not use the sidebar selection.
         </Typography.Text>
-        <div style={{ maxHeight: 280, overflow: "auto", marginBottom: 12 }}>
+        <div style={{ maxHeight: 220, overflow: "auto", marginBottom: 10 }}>
           <DirectoryTree
             className="pdf-directory-tree pdf-upload-picker-tree"
             blockNode
@@ -1041,31 +1170,59 @@ function App() {
         <Typography.Text type="secondary" style={{ display: "block", marginBottom: 4 }}>
           Upload destination
         </Typography.Text>
-        <Typography.Paragraph copyable style={{ marginBottom: 16, wordBreak: "break-all" }}>
+        <Typography.Paragraph copyable style={{ marginBottom: 12, wordBreak: "break-all" }}>
           <Typography.Text code>{uploadModalDestDir || "—"}</Typography.Text>
         </Typography.Paragraph>
+        <Space.Compact block style={{ width: "100%", marginBottom: 10 }}>
+          <Input
+            allowClear
+            placeholder="https://… (direct link to a PDF)"
+            value={uploadUrl}
+            onChange={(e) => setUploadUrl(e.target.value)}
+            onPressEnter={handleDownloadPdfFromUrl}
+          />
+          <Button
+            type="primary"
+            loading={uploadUrlLoading}
+            disabled={!uploadModalDestDir}
+            onClick={handleDownloadPdfFromUrl}
+          >
+            Download
+          </Button>
+        </Space.Compact>
         <Dragger
+          className="upload-modal-dragger"
           multiple
           disabled={!uploadModalDestDir}
           customRequest={async ({ file, onSuccess, onError }) => {
+            const dest = uploadModalDestDir;
+            if (!dest) {
+              onError(new Error("No destination"));
+              return;
+            }
             try {
-              await window.electronAPI.uploadFile(
-                file.name,
-                file.path,
-                uploadModalDestDir
-              );
-              onSuccess("ok");
+              const r = await window.electronAPI.uploadFile(file.name, file.path, dest);
+              if (r?.ok && r.destPath) {
+                onSuccess({ destPath: r.destPath, name: file.name });
+              } else {
+                onError(new Error(r?.error || "Upload failed"));
+              }
             } catch (e) {
               onError(e);
             }
           }}
           onChange={(info) => {
             if (info.file.status === "done") {
+              const destPath = info.file.response?.destPath;
               if (uploadModalDestDir) {
                 window.electronAPI.setLastUploadDir(uploadModalDestDir);
               }
               refreshFromDisk();
               messageApi.success(`${info.file.name} uploaded.`);
+              if (destPath) {
+                setUploadPanelPath(destPath);
+                void hydrateUploadPanelAfterFile(destPath);
+              }
             }
             if (info.file.status === "error") {
               messageApi.error(`${info.file.name} upload failed.`);
@@ -1075,11 +1232,70 @@ function App() {
           <p className="ant-upload-drag-icon">
             <InboxOutlined />
           </p>
-          <p className="ant-upload-text">Click or drag PDF files here to upload</p>
-          <p className="ant-upload-hint" style={{ padding: "0 12px" }}>
-            Files go to the folder selected above.
+          <p className="ant-upload-text">Drop PDFs here or click to browse</p>
+          <p className="ant-upload-hint" style={{ padding: "0 8px" }}>
+            Compact zone — same folder as above.
           </p>
         </Dragger>
+        <Typography.Title level={5} style={{ margin: "12px 0 8px" }}>
+          PDF information
+        </Typography.Title>
+        <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8, fontSize: 12 }}>
+          arXiv-style file names are filled automatically after upload or download. Other PDFs:
+          fill in as you like, then save.
+        </Typography.Text>
+        {uploadPanelPath ? (
+          <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8, fontSize: 11 }}>
+            File: <Typography.Text code>{fileBaseName(uploadPanelPath)}</Typography.Text>
+          </Typography.Text>
+        ) : null}
+        <Form layout="vertical" size="small" style={{ marginBottom: 8 }}>
+          <Form.Item label="Title">
+            <Input
+              value={uploadPanelForm.title}
+              onChange={(e) =>
+                setUploadPanelForm((p) => ({ ...p, title: e.target.value }))
+              }
+              disabled={uploadMetaLoading}
+            />
+          </Form.Item>
+          <Form.Item label="Authors">
+            <Input
+              value={uploadPanelForm.authors}
+              onChange={(e) =>
+                setUploadPanelForm((p) => ({ ...p, authors: e.target.value }))
+              }
+              disabled={uploadMetaLoading}
+            />
+          </Form.Item>
+          <Form.Item label="Year / date">
+            <Input
+              value={uploadPanelForm.year}
+              onChange={(e) =>
+                setUploadPanelForm((p) => ({ ...p, year: e.target.value }))
+              }
+              disabled={uploadMetaLoading}
+            />
+          </Form.Item>
+          <Form.Item label="Journal">
+            <Input
+              value={uploadPanelForm.journal}
+              onChange={(e) =>
+                setUploadPanelForm((p) => ({ ...p, journal: e.target.value }))
+              }
+              disabled={uploadMetaLoading}
+            />
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0 }}>
+            <Button
+              type="primary"
+              onClick={saveUploadPanelMetadata}
+              disabled={!uploadPanelPath || uploadMetaLoading}
+            >
+              Save metadata to library
+            </Button>
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );
