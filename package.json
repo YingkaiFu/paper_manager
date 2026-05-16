@@ -1,6 +1,6 @@
 {
   "name": "paper_manager",
-  "version": "v0.1.9",
+  "version": "0.3.0",
   "private": true,
   "main": "./main.js",
   "author": {
@@ -10,31 +10,28 @@
   "icon": "./assets/icons/logo.ico",
   "description": "A paper manager for researchers",
   "homepage": ".",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
-    "antd": "^5.11.5",
-    "concurrently": "^8.2.2",
+    "antd": "^5.24.6",
+    "axios": "^1.9.0",
+    "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "electron-is-dev": "^2.0.0",
-    "electron-squirrel-startup": "^1.0.0",
+    "electron-squirrel-startup": "^1.0.1",
     "nedb": "^1.8.0",
-    "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^2.0.943",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "wait-on": "^7.2.0",
-    "web-vitals": "^2.1.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "wait-on": "^8.0.3",
     "xml2js": "^0.6.2"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "dev": "concurrently \"cross-env BROWSER=none npm start\" \"wait-on http://localhost:3000 && electron .\"",
+    "dev": "concurrently -k \"cross-env BROWSER=none vite\" \"wait-on tcp:5173 && electron .\"",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node -e \"console.log('No test runner configured; see docs/development.md')\"",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "electron-start": "electron-forge start",
@@ -42,40 +39,24 @@
     "electron-make": "electron-forge make",
     "builder": "electron-builder"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  },
   "devDependencies": {
-    "@electron-forge/cli": "^7.2.0",
-    "@electron-forge/maker-deb": "^7.2.0",
-    "@electron-forge/maker-rpm": "^7.2.0",
-    "@electron-forge/maker-squirrel": "^7.2.0",
-    "@electron-forge/maker-zip": "^7.2.0",
-    "@electron-forge/plugin-auto-unpack-natives": "^7.2.0",
-    "electron": "^27.1.3",
-    "electron-builder": "^24.9.1"
+    "@electron-forge/cli": "^7.8.1",
+    "@electron-forge/maker-deb": "^7.8.1",
+    "@electron-forge/maker-rpm": "^7.8.1",
+    "@electron-forge/maker-squirrel": "^7.8.1",
+    "@electron-forge/maker-zip": "^7.8.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
+    "@vitejs/plugin-react": "^4.4.1",
+    "electron": "^27.3.11",
+    "electron-builder": "^24.13.3",
+    "vite": "^6.3.5"
   },
   "build": {
     "appId": "paper_manager",
     "productName": "paper_manager",
     "copyright": "GPL 3.0",
     "directories": {
-      "buildResources": "build",
+      "buildResources": "installer",
       "output": "dist"
     },
     "nsis": {
@@ -91,9 +72,9 @@
     "files": [
       "build/**/*",
       "./main.js",
-      "./preload.js"
+      "./preload.js",
+      "./libraryScan.js"
     ],
     "extends": null
   }
-
 }

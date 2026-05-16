@@ -1,38 +1,61 @@
+/* App shell: left-aligned layout (file browser + table), not centered CRA layout */
 .App {
-  text-align: center;
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
+  text-align: left;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
 }
 
-.App-link {
-  color: #61dafb;
+/* Left sidebar: file explorer style */
+.app-file-browser {
+  text-align: left;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.app-file-browser .ant-typography {
+  text-align: left;
+}
+
+.app-file-browser .ant-btn {
+  margin-inline: 0;
+}
+
+/* Ant Design DirectoryTree / Tree — flush left, full-width titles */
+.app-file-browser .pdf-directory-tree.ant-tree {
+  background: transparent;
+  font-size: 13px;
+}
+
+.app-file-browser .pdf-directory-tree .ant-tree-list-holder-inner {
+  align-items: stretch;
+}
+
+.app-file-browser .pdf-directory-tree .ant-tree-treenode {
+  padding-block: 1px;
+}
+
+.app-file-browser .pdf-directory-tree .ant-tree-node-content-wrapper {
+  text-align: left;
+  justify-content: flex-start;
+  flex: 1;
+  min-width: 0;
+  border-radius: 4px;
+}
+
+.app-file-browser .pdf-directory-tree .ant-tree-title {
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-file-browser .pdf-directory-tree .ant-tree-switcher {
+  align-self: center;
+}
+
+/* Upload zone in sidebar */
+.app-file-browser .ant-upload.ant-upload-drag {
+  text-align: left;
+}
+
+.app-file-browser .ant-upload-drag-icon,
+.app-file-browser .ant-upload-text {
+  text-align: left;
 }

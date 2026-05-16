@@ -7,25 +7,85 @@ const {
   shell,
 } = require("electron");
 const path = require("path");
-const { writeFile, readFileSync, existsSync } = require("fs");
-const { execFile } = require("child_process");
-const isDev = require("electron-is-dev");
-const { remote } = require("electron");
 const fs = require("fs");
+const fsPromises = require("fs").promises;
+const isDev = require("electron-is-dev");
 const axios = require("axios");
 const xml2js = require("xml2js");
-const { PDFDocument } = require("pdf-lib");
 const Datastore = require("nedb");
+const { buildPdfTreeNodes, collectPdfPaths } = require("./libraryScan.js");
+
 const isMac = process.platform === "darwin";
 
+const DEV_SERVER_URL = "http://localhost:5173";
+
+/** arXiv asks for a descriptive User-Agent with contact. */
+const HTTP_UA =
+  "PaperManager/0.2 (https://github.com/YingkaiFu/paper_manager; mailto:Yingkai.Fu@outlook.com)";
+
+const axiosCommon = {
+  headers: { "User-Agent": HTTP_UA },
+  timeout: 45000,
+};
+
 function isArxivFileName(fileName) {
-  // arXiv 文件名格式，可能包含版本号，如 "2104.00001v1"
-  const arxivRegex = /^\d{4}\.\d{4,5}(v\d+)?$/;
-  return arxivRegex.test(fileName);
+  return /^\d{4}\.\d{4,5}(v\d+)?$/.test(fileName);
+}
+
+function fileRowFromPath(fullPath, doc) {
+  const ext = path.extname(fullPath);
+  const stem = path.basename(fullPath, ext);
+  const base = {
+    key: fullPath,
+    path: fullPath,
+    originalname: path.basename(fullPath),
+    name: path.basename(fullPath),
+    filename: stem,
+    title: stem,
+    authors: "",
+    year: "",
+    journal: "",
+    summary: "",
+    updatedFlag: false,
+  };
+  if (!doc) return base;
+  const { _id, ...rest } = doc;
+  return { ...base, ...rest, key: fullPath, path: fullPath };
+}
+
+function scanLibrary(db, rootPath) {
+  const paths = collectPdfPaths(rootPath);
+  const treeData = buildPdfTreeNodes(rootPath);
+  return Promise.all(
+    paths.map(
+      (p) =>
+        new Promise((resolve) => {
+          db.findOne({ $or: [{ path: p }, { _id: p }] }, (err, doc) => {
+            resolve(fileRowFromPath(p, !err && doc ? doc : null));
+          });
+        })
+    )
+  ).then((files) => ({ treeData, files }));
+}
+
+function parseArxivAuthors(entry) {
+  if (!entry || !entry.author) return "";
+  const raw = entry.author;
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list
+    .map((a) => {
+      if (!a) return "";
+      if (typeof a === "string") return a;
+      const n = a.name;
+      if (Array.isArray(n)) return String(n[0] || "").trim();
+      if (typeof n === "string") return n.trim();
+      return "";
+    })
+    .filter(Boolean)
+    .join(", ");
 }
 
 const template = [
-  // { role: 'appMenu' }
   ...(isMac
     ? [
         {
@@ -44,12 +104,10 @@ const template = [
         },
       ]
     : []),
-  // { role: 'fileMenu' }
   {
     label: "File",
     submenu: [isMac ? { role: "close" } : { role: "quit" }],
   },
-  // { role: 'editMenu' }
   {
     label: "Edit",
     submenu: [
@@ -73,7 +131,6 @@ const template = [
         : [{ role: "delete" }, { type: "separator" }, { role: "selectAll" }]),
     ],
   },
-  // { role: 'viewMenu' }
   {
     label: "View",
     submenu: [
@@ -88,7 +145,6 @@ const template = [
       { role: "togglefullscreen" },
     ],
   },
-  // { role: 'windowMenu' }
   {
     label: "Window",
     submenu: [
@@ -110,7 +166,6 @@ const template = [
       {
         label: "Learn More",
         click: async () => {
-          const { shell } = require("electron");
           await shell.openExternal("https://electronjs.org");
         },
       },
@@ -122,452 +177,550 @@ const dbPath = path.join(app.getPath("userData"), "files.db");
 const db = new Datastore({ filename: dbPath, autoload: true });
 module.exports = db;
 
-const savePath = path.join(app.getPath("userData"), "data.json");
 const menu = Menu.buildFromTemplate(template);
 Menu.setApplicationMenu(menu);
+
 function createWindow() {
-  // 创建浏览器窗口
   const win = new BrowserWindow({
-    width: 1250,
-    height: 800,
-    // resizable: false, // 禁止调整窗口大小
+    width: 1280,
+    height: 820,
     icon: path.join(__dirname, "assets", "icons", "logo.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
     },
   });
 
-  // 加载应用的 index.html
-  const urlLocation = isDev ? "http://localhost:3000" : "build/index.html";
-  // const startFile = process.env.ELECTRON_START_URL || `'build/index.html')}`;
-  // console.log(urlLocation);
+  const prodIndex = path.join(__dirname, "build", "index.html");
   if (isDev) {
-    win.webContents.openDevTools();
+    win.webContents.openDevTools({ mode: "detach" });
+    win.loadURL(DEV_SERVER_URL);
+  } else {
+    win.loadFile(prodIndex);
   }
-  // win.loadURL(urlLocation);
-  isDev ? win.loadURL(urlLocation) : win.loadFile(urlLocation);
-  //   win.loadFile('index.html');
 }
 
 app.whenReady().then(() => {
   createWindow();
-
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
-
-ipcMain.handle("listFolder", async (event, directory) => {
-  const dirents = fs.readdirSync(directory, { withFileTypes: true });
-  const fileDataPromises = dirents
-    .filter(
-      (dirent) =>
-        dirent.isFile() && path.extname(dirent.name).toLowerCase() === ".pdf"
-    )
-    .map((dirent) => {
-      return new Promise((resolve, reject) => {
-        db.findOne(
-          { path: path.join(dirent.path, dirent.name) },
-          (err, doc) => {
-            if (err) {
-              reject(err);
-            } else {
-              const ext = path.extname(dirent.name);
-              // 去除扩展名，得到文件名
-              const fileNameWithoutExt = dirent.name.replace(ext, "");
-              const fileData = {
-                ...dirent, // 文件的基本信息
-                key: path.join(dirent.path, dirent.name),
-                originalname: dirent.name,
-                updatedFlag: false,
-                year: "", // 添加 year 键，值为默认的空字符串
-                authors: "", // 添加 author 键，值为默认的空字符串
-                summary: "", // 添加 summary 键，值为默认的空字符串
-                journal: "", // 添加 journal 键，值为默认的空字符串
-                title: fileNameWithoutExt, // 添加 title 键，值为默认的空字符串
-                path: path.join(dirent.path, dirent.name), // 添加 path 键，值为文件的完整路径
-                ...(doc || {}), // 数据库查询结果
-              };
-              resolve(fileData);
-            }
-          }
-        );
-      });
-    });
-  db.update(
-    { _id: "folderData" },
-    { $set: { lastfolder: directory } },
-    { upsert: true }
-  );
-  try {
-    const filesWithDbInfo = await Promise.all(fileDataPromises);
-    return filesWithDbInfo;
-  } catch (error) {
-    console.error("Error reading from database:", error);
-    return [];
-  }
+  if (process.platform !== "darwin") app.quit();
 });
 
 ipcMain.handle("openDialog", async () => {
   const result = await dialog.showOpenDialog({
     properties: ["openDirectory"],
   });
+  if (result.canceled) return null;
 
-  if (!result.canceled) {
-    const folderPath = result.filePaths[0];
-    let folderContents = fs
-      .readdirSync(folderPath, { withFileTypes: true })
-      .filter((item) => item.isDirectory())
-      .map((dir) => {
-        const subFolderPath = path.join(folderPath, dir.name);
+  const rootPath = result.filePaths[0];
+  const { treeData, files } = await scanLibrary(db, rootPath);
 
-        // 计算该子目录下的 PDF 文件数量
-        const pdfCount = fs
-          .readdirSync(subFolderPath)
-          .filter((file) => file.endsWith(".pdf")).length;
+  await new Promise((resolve, reject) => {
+    db.update(
+      { _id: "folderData" },
+      {
+        $set: {
+          rootPath,
+          lastUploadDir: rootPath,
+        },
+      },
+      { upsert: true },
+      (err) => (err ? reject(err) : resolve())
+    );
+  });
 
-        // 返回原始对象，并添加 pdfCount 属性
-        return {
-          ...dir, // 展开原有属性
-          pdfCount: pdfCount, // 添加新属性
-          color: "#1677FF",
-        };
-      });
-    const config = {
-      folderPath: folderPath,
-      folderContents: folderContents,
-      lastfolder: "",
-    };
-    db.update({ _id: "folderData" }, { $set: config }, { upsert: true });
-    return config;
+  return { rootPath, treeData, files };
+});
+
+ipcMain.handle("refreshLibrary", async (event, rootPath) => {
+  if (!rootPath || !fs.existsSync(rootPath)) {
+    return { treeData: [], files: [] };
   }
-  return null;
+  return scanLibrary(db, rootPath);
 });
 
 ipcMain.handle("initFolder", async () => {
   return new Promise((resolve, reject) => {
-    db.findOne({ _id: "folderData" }, (err, doc) => {
+    db.findOne({ _id: "folderData" }, async (err, doc) => {
       if (err) {
-        console.error("Error fetching data:", err);
         reject(err);
-      } else {
-        resolve(doc);
+        return;
+      }
+      const rootPath = doc?.rootPath || doc?.folderPath;
+      if (!rootPath || !fs.existsSync(rootPath)) {
+        resolve(null);
+        return;
+      }
+      if (doc && !doc.rootPath && doc.folderPath) {
+        await new Promise((res, rej) => {
+          db.update(
+            { _id: "folderData" },
+            { $set: { rootPath: doc.folderPath } },
+            {},
+            (e2) => (e2 ? rej(e2) : res())
+          );
+        }).catch(() => {});
+      }
+      try {
+        const { treeData, files } = await scanLibrary(db, rootPath);
+        resolve({
+          rootPath,
+          lastUploadDir: doc?.lastUploadDir || rootPath,
+          treeData,
+          files,
+        });
+      } catch (e) {
+        console.error(e);
+        resolve(null);
       }
     });
   });
 });
 
-ipcMain.handle(
-  "moveFile",
-  async (event, { rootFolder, selectedValue, currentFile }) => {
-    return new Promise((resolve, reject) => {
-      const new_path = path.join(rootFolder, selectedValue);
-      const old_path = currentFile.path;
-      const new_name = path.join(new_path, path.basename(old_path));
+ipcMain.handle("setLastUploadDir", async (event, dirPath) => {
+  await new Promise((resolve, reject) => {
+    db.update(
+      { _id: "folderData" },
+      { $set: { lastUploadDir: dirPath } },
+      { upsert: true },
+      (err) => (err ? reject(err) : resolve())
+    );
+  });
+  return true;
+});
 
-      fs.rename(old_path, new_name, (err) => {
-        if (err) {
-          console.log(err);
-          resolve(false); // 使用 resolve 而不是 return
-        } else {
-          console.log("File moved successfully");
-          db.findOne({ _id: "folderData" }, (err, folderData) => {
-            if (err) {
-              console.log("Error reading from DB:", err);
-              resolve(false);
-            } else {
-              // 更新 folderContents 中的 pdfCount
-              const updatedFolderContents = folderData.folderContents.map(
-                (folder) => {
-                  if (folder.name === path.basename(path.dirname(old_path))) {
-                    return { ...folder, pdfCount: folder.pdfCount - 1 }; // 减去 1
-                  }
-                  if (folder.name === selectedValue) {
-                    return { ...folder, pdfCount: (folder.pdfCount || 0) + 1 }; // 加上 1
-                  }
-                  return folder;
-                }
-              );
+ipcMain.handle("saveFileMetadata", async (event, file) => {
+  if (!file?.path) return false;
+  const { path: p, ...rest } = file;
+  return new Promise((resolve) => {
+    db.update({ _id: p }, { $set: { ...rest, path: p, key: p } }, { upsert: true }, (err) =>
+      resolve(!err)
+    );
+  });
+});
 
-              // 更新数据库
-              db.update(
-                { _id: "folderData" },
-                { $set: { folderContents: updatedFolderContents } },
-                { upsert: true },
-                (dbErr) => {
-                  if (dbErr) {
-                    console.log("Error updating folderData in DB:", dbErr);
-                    resolve(false);
-                  } else {
-                    resolve(true);
-                  }
-                }
-              );
-            }
-          });
-        }
-      });
+ipcMain.handle("openFile", async (event, filePath) => {
+  const err = await shell.openPath(filePath);
+  if (err) console.error("Error opening file:", err);
+});
+
+ipcMain.handle("deleteFile", async (event, filePath) => {
+  try {
+    await fsPromises.unlink(filePath);
+    await new Promise((resolve) => {
+      db.remove({ _id: filePath }, { multi: false }, () => resolve());
     });
+    return true;
+  } catch (err) {
+    console.error("File delete failed:", err);
+    return false;
+  }
+});
+
+function isUnderRoot(rootPath, targetPath) {
+  const root = path.resolve(rootPath) + path.sep;
+  const abs = path.resolve(targetPath);
+  const rootDir = path.resolve(rootPath);
+  return abs === rootDir || abs.startsWith(root);
+}
+
+function invalidFsName(name) {
+  if (!name || typeof name !== "string") return "Empty name";
+  const t = name.trim();
+  if (!t) return "Empty name";
+  if (t === "." || t === "..") return "Invalid name";
+  if (/[<>:"/\\|?*\x00-\x1f]/.test(t)) return "Name contains illegal characters";
+  return null;
+}
+
+ipcMain.handle(
+  "createFolder",
+  async (event, { rootPath, parentPath, name }) => {
+    const err = invalidFsName(name);
+    if (err) return { ok: false, error: err };
+    if (!isUnderRoot(rootPath, parentPath)) {
+      return { ok: false, error: "Invalid parent" };
+    }
+    const dest = path.join(parentPath, name.trim());
+    if (fs.existsSync(dest)) {
+      return { ok: false, error: "Already exists" };
+    }
+    try {
+      await fsPromises.mkdir(dest, { recursive: false });
+      return { ok: true, createdPath: dest };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
   }
 );
 
-ipcMain.handle("openFile", async (event, filePath) => {
-  shell.openPath(filePath).then((response) => {
-    if (response) {
-      console.error("Error opening file:", response);
-    }
+function migratePdfDocId(oldId, newId) {
+  return new Promise((resolve) => {
+    db.findOne({ _id: oldId }, (err, doc) => {
+      if (err || !doc) {
+        resolve();
+        return;
+      }
+      db.remove({ _id: oldId }, {}, (e1) => {
+        if (e1) {
+          resolve();
+          return;
+        }
+        const next = {
+          ...doc,
+          _id: newId,
+          path: newId,
+          key: newId,
+          name: path.basename(newId),
+          originalname: path.basename(newId),
+        };
+        db.insert(next, () => resolve());
+      });
+    });
   });
-});
-ipcMain.handle("deleteFile", async (event, filePath) => {
-  console.log(filePath, "ipcdelete");
-  fs.unlink(filePath, (err) => {
-    if (err) {
-      console.error("File delete failed:", err);
-      return false;
+}
+
+function migrateNedbAfterDirRename(oldDir, newDir) {
+  const oldRes = path.resolve(oldDir);
+  const oldBase = oldRes + path.sep;
+  return new Promise((resolve) => {
+    db.find({ _id: { $ne: "folderData" } }, (err, docs) => {
+      if (err || !docs?.length) {
+        resolve();
+        return;
+      }
+      const migrations = [];
+      for (const doc of docs) {
+        const id = doc._id;
+        if (typeof id !== "string" || !id.toLowerCase().endsWith(".pdf")) continue;
+        const abs = path.resolve(id);
+        if (abs !== oldRes && !abs.startsWith(oldBase)) continue;
+        const rel = path.relative(oldRes, abs);
+        if (rel.startsWith("..") || path.isAbsolute(rel)) continue;
+        const newId = path.join(path.resolve(newDir), rel);
+        if (newId !== id) migrations.push({ oldId: id, newId });
+      }
+      let i = 0;
+      const step = () => {
+        if (i >= migrations.length) {
+          resolve();
+          return;
+        }
+        const { oldId, newId } = migrations[i++];
+        migratePdfDocId(oldId, newId).then(step);
+      };
+      step();
+    });
+  });
+}
+
+ipcMain.handle(
+  "moveEntry",
+  async (event, { rootPath, sourcePath, destinationDir }) => {
+    if (!rootPath || !sourcePath || !destinationDir) {
+      return { ok: false, error: "Missing arguments" };
+    }
+    const src = path.resolve(sourcePath);
+    const dstDir = path.resolve(destinationDir);
+    if (!isUnderRoot(rootPath, src) || !isUnderRoot(rootPath, dstDir)) {
+      return { ok: false, error: "Outside library root" };
+    }
+    if (path.resolve(rootPath) === src) {
+      return { ok: false, error: "Cannot move library root" };
+    }
+    let dstDirStat;
+    try {
+      dstDirStat = await fsPromises.stat(dstDir);
+    } catch {
+      return { ok: false, error: "Destination folder not found" };
+    }
+    if (!dstDirStat.isDirectory()) {
+      return { ok: false, error: "Destination is not a folder" };
+    }
+    let srcStat;
+    try {
+      srcStat = await fsPromises.stat(src);
+    } catch {
+      return { ok: false, error: "Source not found" };
+    }
+    const base = path.basename(src);
+    const newPath = path.join(dstDir, base);
+    if (!isUnderRoot(rootPath, newPath)) {
+      return { ok: false, error: "Invalid target path" };
+    }
+    if (path.resolve(newPath) === src) {
+      return { ok: false, error: "Already in this folder" };
+    }
+    if (srcStat.isDirectory()) {
+      const srcLower = src + path.sep;
+      const dstLower = path.resolve(dstDir);
+      if (dstLower === src || dstLower.startsWith(srcLower)) {
+        return { ok: false, error: "Cannot move a folder into itself" };
+      }
+    }
+    if (fs.existsSync(newPath)) {
+      return {
+        ok: false,
+        error: "A file or folder with that name already exists there",
+      };
+    }
+    try {
+      await fsPromises.rename(src, newPath);
+      if (srcStat.isDirectory()) {
+        await migrateNedbAfterDirRename(src, newPath);
+      } else if (srcStat.isFile() && src.toLowerCase().endsWith(".pdf")) {
+        await migratePdfDocId(src, newPath);
+      }
+      return { ok: true, newPath };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  }
+);
+
+ipcMain.handle(
+  "renameEntry",
+  async (event, { rootPath, oldPath, newBaseName }) => {
+    const why = invalidFsName(newBaseName);
+    if (why) return { ok: false, error: why };
+    if (!isUnderRoot(rootPath, oldPath)) {
+      return { ok: false, error: "Invalid path" };
+    }
+    if (path.resolve(oldPath) === path.resolve(rootPath)) {
+      return { ok: false, error: "Cannot rename library root" };
+    }
+    const trimmed = newBaseName.trim();
+    const newPath = path.join(path.dirname(oldPath), trimmed);
+    if (!isUnderRoot(rootPath, newPath)) {
+      return { ok: false, error: "Invalid target path" };
+    }
+    if (fs.existsSync(newPath)) {
+      return { ok: false, error: "Target already exists" };
+    }
+    try {
+      const stat = await fsPromises.stat(oldPath);
+      await fsPromises.rename(oldPath, newPath);
+      if (stat.isDirectory()) {
+        await migrateNedbAfterDirRename(oldPath, newPath);
+      } else if (stat.isFile() && oldPath.toLowerCase().endsWith(".pdf")) {
+        await migratePdfDocId(oldPath, newPath);
+      }
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  }
+);
+
+ipcMain.handle("deleteEntry", async (event, { rootPath, targetPath }) => {
+  if (!isUnderRoot(rootPath, targetPath)) {
+    return { ok: false, error: "Invalid path" };
+  }
+  if (path.resolve(targetPath) === path.resolve(rootPath)) {
+    return { ok: false, error: "Cannot delete library root" };
+  }
+  try {
+    const stat = await fsPromises.stat(targetPath);
+    if (stat.isDirectory()) {
+      const base = path.resolve(targetPath) + path.sep;
+      await fsPromises.rm(targetPath, { recursive: true, force: true });
+      await new Promise((resolve) => {
+        db.find({ _id: { $ne: "folderData" } }, (err, docs) => {
+          if (err || !docs?.length) {
+            resolve();
+            return;
+          }
+          let left = docs.length;
+          const doneOne = () => {
+            left -= 1;
+            if (left <= 0) resolve();
+          };
+          for (const doc of docs) {
+            const id = doc._id;
+            if (typeof id !== "string" || !id.toLowerCase().endsWith(".pdf")) {
+              doneOne();
+              continue;
+            }
+            const abs = path.resolve(id);
+            if (abs === path.resolve(targetPath) || abs.startsWith(base)) {
+              db.remove({ _id: id }, {}, doneOne);
+            } else {
+              doneOne();
+            }
+          }
+        });
+      });
     } else {
-      console.log("File deleted successfully");
-      return true;
+      await fsPromises.unlink(targetPath);
+      await new Promise((resolve) => {
+        db.remove({ _id: targetPath }, {}, () => resolve());
+      });
     }
-  });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
 });
 
 ipcMain.handle(
   "uploadFile",
-  (event, { fileName, sourcePath, destinationPath }) => {
-    fs.cp(sourcePath, path.join(destinationPath, fileName), (err) => {
-      if (err) {
-        console.error("File copy failed:", err);
-        return false;
-      } else {
-        console.log("File copied successfully");
-        return true;
-      }
-    });
-  }
-);
-ipcMain.handle(
-  "addFolder",
-  async (event, rootFolder, categoryName, categoryColor) => {
-    const new_path = path.join(rootFolder, categoryName);
-    fs.mkdirSync(new_path, { recursive: true });
-
-    console.log("Folder created successfully");
-
-    // 获取当前的 folderContents
-    const currentData = await new Promise((resolve, reject) => {
-      db.findOne({ _id: "folderData" }).exec((err, doc) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(doc);
-        }
-      });
-    });
-
-    // 创建新文件夹的对象
-    const newFolder = {
-      name: categoryName,
-      path: rootFolder,
-      pdfCount: 0, // 新创建的文件夹初始 PDF 数量为 0
-      color: categoryColor || "#1677FF", // 使用指定的颜色或默认颜色
-    };
-
-    // 如果已有 folderContents，则追加新文件夹，否则创建新数组
-    const updatedFolderContents =
-      currentData && currentData.folderContents
-        ? [...currentData.folderContents, newFolder]
-        : [newFolder];
-
-    // 更新数据库记录
-    await db.update(
-      { _id: "folderData" },
-      { $set: { folderContents: updatedFolderContents } },
-      { upsert: true }
-    );
-
-    // 返回更新后的文件夹列表
-    return updatedFolderContents;
+  async (event, { fileName, sourcePath, destinationPath }) => {
+    try {
+      await fsPromises.mkdir(destinationPath, { recursive: true });
+      await fsPromises.cp(sourcePath, path.join(destinationPath, fileName));
+      return true;
+    } catch (err) {
+      console.error("File copy failed:", err);
+      return false;
+    }
   }
 );
 
-ipcMain.handle("deleteFolder", async (event, directory) => {
-  fs.rmdirSync(directory, { recursive: true });
-  const currentData = await new Promise((resolve, reject) => {
-    db.findOne({ _id: "folderData" }).exec((err, doc) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(doc);
-      }
-    });
-  });
-  if (currentData && currentData.folderContents) {
-    // 获取要删除的文件夹名称（假设 directory 是完整路径）
-    const folderNameToDelete = path.basename(directory);
-
-    // 过滤掉名字匹配的项
-    const updatedFolderContents = currentData.folderContents.filter(
-      (item) => item.name !== folderNameToDelete
-    );
-    console.log(
-      updatedFolderContents,
-      "updatedFolderContents",
-      folderNameToDelete,
-      currentData
-    );
-    // 更新数据库记录
-    const result = await db.update(
-      { _id: "folderData" },
-      { $set: { folderContents: updatedFolderContents } },
-      {}
-    );
-  }
-});
-ipcMain.handle("renameFolder", async (event, { src, des, color }) => {
-  state = fs.renameSync(src, des);
-  console.log("Folder rename successfully");
-  const folderData = await new Promise((resolve, reject) => {
-    db.findOne({ _id: "folderData" }, (err, doc) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(doc);
-      }
-    });
-  });
-
-  // 检查 folderContents 是否存在并更新指定项
-  if (folderData && folderData.folderContents) {
-    const folderContents = folderData.folderContents.map((item) => {
-      if (item.name === path.basename(src)) {
-        return { ...item, name: path.basename(des), color: color }; // 更新路径和颜色
-      }
-      return item;
-    });
-    // 更新数据库中的 folderContents
-    await new Promise((resolve, reject) => {
-      db.update(
-        { _id: "folderData" },
-        { $set: { folderContents: folderContents } },
-        { upsert: true },
-        (err, numReplaced) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(numReplaced);
-          }
-        }
-      );
-    });
-
-    // 更新 lastfolder
-    await new Promise((resolve, reject) => {
-      db.update(
-        { _id: "folderData" },
-        { $set: { lastfolder: des } },
-        { upsert: true },
-        (err, numReplaced) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(numReplaced);
-          }
-        }
-      );
-    });
-    console.log(folderContents);
-
-    return folderData ? folderContents : [];
-  }
-});
-
-ipcMain.handle("openFileDirectory", async (event, directory) => {
-  shell.showItemInFolder(directory);
-});
-
-ipcMain.handle("readpdf", async (event, directory) => {
-  fileNameWithExt = path.basename(directory);
-  const ext = path.extname(directory);
-  // 去除扩展名，得到文件名
-  const fileNameWithoutExt = fileNameWithExt.replace(ext, "");
+ipcMain.handle("openFileDirectory", async (event, filePath) => {
   try {
-    if (isArxivFileName(fileNameWithoutExt)) {
-      const link =
-        "http://export.arxiv.org/api/query?search_query=" + fileNameWithoutExt;
-      const response = await axios.get(link);
-      const data = response.data;
-      // 使用 xml2js 解析 XML 数据
-      const parser = new xml2js.Parser();
-      const result = await parser.parseStringPromise(data);
-      const entry = result.feed.entry[0];
-      const published = entry.published[0];
-      // 转换日期格式
-      const publishedDate = new Date(published);
+    const stat = await fsPromises.stat(filePath);
+    if (stat.isDirectory()) {
+      const err = await shell.openPath(filePath);
+      if (err) console.error("openPath (folder):", err);
+    } else {
+      shell.showItemInFolder(filePath);
+    }
+  } catch (e) {
+    console.error("openFileDirectory failed:", e);
+  }
+});
+
+ipcMain.handle("readpdf", async (event, filePath) => {
+  const fileNameWithExt = path.basename(filePath);
+  const ext = path.extname(filePath);
+  const stem = fileNameWithExt.replace(ext, "");
+
+  try {
+    if (isArxivFileName(stem)) {
+      let entry = null;
+      const tryIds = [stem];
+      const m = stem.match(/^(\d{4}\.\d{4,5})v\d+$/);
+      if (m) tryIds.push(m[1]);
+
+      for (const id of tryIds) {
+        const url = `https://export.arxiv.org/api/query?id_list=${encodeURIComponent(
+          id
+        )}`;
+        const response = await axios.get(url, axiosCommon);
+        const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
+        const result = await parser.parseStringPromise(response.data);
+        const feed = result.feed || result;
+        let rawEntry = feed.entry;
+        if (!rawEntry) continue;
+        rawEntry = Array.isArray(rawEntry) ? rawEntry[0] : rawEntry;
+        if (rawEntry && (rawEntry.title || rawEntry.summary)) {
+          entry = rawEntry;
+          break;
+        }
+      }
+
+      if (!entry) return null;
+
+      const titleRaw = entry.title;
+      const title =
+        typeof titleRaw === "string"
+          ? titleRaw
+          : Array.isArray(titleRaw)
+            ? titleRaw[0]
+            : "";
+
+      const publishedRaw = entry.published;
+      const published =
+        typeof publishedRaw === "string"
+          ? publishedRaw
+          : Array.isArray(publishedRaw)
+            ? publishedRaw[0]
+            : publishedRaw;
+
+      const publishedDate = published ? new Date(published) : new Date();
       const formattedDate = `${publishedDate.getFullYear()}-${String(
         publishedDate.getMonth() + 1
       ).padStart(2, "0")}`;
-      const title = entry.title[0];
-      var authors = entry.author.map((author) => author.name[0]);
-      authors = authors.join(", ");
-      const summary = entry.summary[0];
+
+      const summaryRaw = entry.summary;
+      const summary =
+        typeof summaryRaw === "string"
+          ? summaryRaw
+          : Array.isArray(summaryRaw)
+            ? summaryRaw[0]
+            : "";
+
+      const authors = parseArxivAuthors(entry);
+
       const file = {
-        path: directory,
+        path: filePath,
         name: fileNameWithExt,
         originalname: fileNameWithExt,
-        key: directory,
+        key: filePath,
         updatedFlag: true,
-        filename: fileNameWithoutExt,
-        title: title.replace(/\n/g, ""),
-        authors: authors,
-        summary: summary.replace(/\n/g, ""),
+        filename: stem,
+        title: String(title || stem).replace(/\s+/g, " ").trim(),
+        authors,
+        summary: String(summary || "")
+          .replace(/\s+/g, " ")
+          .trim(),
         year: formattedDate,
         journal: "arXiv",
-      }; // 返回解析后的信息
-      db.update({ _id: file.path }, file, { upsert: true }, (err) => {
-        if (err) {
-          console.log("Error updating file in DB:", err);
-        }
-      });
-      return file;
-    } else {
-      const link = "https://api.crossref.org/works?query=" + fileNameWithoutExt;
-      const response = await axios.get(link);
-      const data = response.data.message.items[0];
-      const title = data.title[0]; // 提取标题
-      const author_list = data.author.map((author) => {
-        return author.given + " " + author.family;
-      });
-      const authors = author_list.join(", "); // 提取作者
-      const file = {
-        path: directory,
-        name: fileNameWithExt,
-        originalname: fileNameWithExt,
-        key: directory,
-        filename: fileNameWithoutExt,
-        title: title.replace(/\n/g, ""),
-        authors: authors,
-        updatedFlag: true,
-        summary: "",
-        year: "",
-        journal: "crossref",
       };
-      db.update({ _id: file.path }, file, { upsert: true }, (err) => {
-        if (err) {
-          console.log("Error updating file in DB:", err);
-        }
+
+      db.update({ _id: file.path }, { $set: file }, { upsert: true }, (err) => {
+        if (err) console.error("DB update:", err);
       });
       return file;
     }
+
+    const url = `https://api.crossref.org/works?query=${encodeURIComponent(
+      stem
+    )}`;
+    const response = await axios.get(url, axiosCommon);
+    const items = response.data?.message?.items;
+    if (!items?.length) return null;
+
+    const data = items[0];
+    const title = (data.title && data.title[0]) || stem;
+    let authors = "";
+    if (Array.isArray(data.author)) {
+      authors = data.author
+        .map((author) => {
+          const given = author.given || "";
+          const family = author.family || "";
+          return `${given} ${family}`.trim();
+        })
+        .filter(Boolean)
+        .join(", ");
+    }
+
+    const file = {
+      path: filePath,
+      name: fileNameWithExt,
+      originalname: fileNameWithExt,
+      key: filePath,
+      filename: stem,
+      title: String(title).replace(/\n/g, ""),
+      authors,
+      updatedFlag: true,
+      summary: "",
+      year: "",
+      journal: "crossref",
+    };
+
+    db.update({ _id: file.path }, { $set: file }, { upsert: true }, (err) => {
+      if (err) console.error("DB update:", err);
+    });
+    return file;
   } catch (error) {
-    console.error("Error fetching data from arXiv:", error);
+    console.error("readpdf:", error.message || error);
     return null;
   }
 });

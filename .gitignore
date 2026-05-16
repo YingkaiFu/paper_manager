@@ -1,3 +1,6 @@
+# Local scratch (e.g. lockfile generation)
+_tmp_install/
+
 # Logs
 logs
 *.log
