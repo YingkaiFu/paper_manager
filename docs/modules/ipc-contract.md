@@ -17,7 +17,8 @@ All channels use `ipcRenderer.invoke` from the preload script and `ipcMain.handl
 | `renameEntry` | `{ rootPath, oldPath, newBaseName }` | `{ ok: boolean, error?: string }` — renames file or folder (basename only); cannot rename the library root. PDFs and subtree paths are migrated in NeDB after renames. |
 | `deleteEntry` | `{ rootPath, targetPath }` | `{ ok: boolean, error?: string }` — deletes file or directory recursively; cannot delete the library root. Removes affected PDF rows from NeDB. |
 | `moveEntry` | `{ rootPath, sourcePath, destinationDir }` | `{ ok: boolean, error?: string, newPath?: string }` — moves a file or folder into `destinationDir` (same basename). Updates NeDB for PDFs / subtrees. Cannot move library root, into self, or into a descendant of a moved folder. |
-| `readpdf` | `filePath: string` | Metadata object or `null`. arXiv IDs use **HTTPS** `export.arxiv.org` `id_list=`; others query Crossref. |
+| `readPdf` | `filePath: string` | `{ ok: boolean, file?: FileRow, error?: string }` — arXiv ids (strict or embedded in stem) use **HTTPS** `export.arxiv.org` `id_list=`; others query Crossref. Persists to NeDB on success. |
+| `checkArxivConnection` | — | `{ ok: boolean, latencyMs: number, probeId: string, error?: string }` — GET probe entry `2312.07540` from export API (connectivity test). |
 | `saveFileMetadata` | `file: FileRow` | Persists edited fields to NeDB (`$set`). Returns `boolean`. |
 
 ### `FileRow` (conceptual)

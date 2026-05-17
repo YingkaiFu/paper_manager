@@ -13,6 +13,7 @@
 | `uploadFile` | `uploadFile` |
 | `downloadPdfFromUrl` | `downloadPdfFromUrl` |
 | `readPdf` | `readpdf` |
+| `checkArxivConnection` | `checkArxivConnection` |
 | `saveFileMetadata` | `saveFileMetadata` |
 | `openFileDirectory` | `openFileDirectory` |
 | `createFolder` | `createFolder` |

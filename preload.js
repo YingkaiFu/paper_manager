@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   downloadPdfFromUrl: (payload) =>
     ipcRenderer.invoke("downloadPdfFromUrl", payload),
   readPdf: (filePath) => ipcRenderer.invoke("readpdf", filePath),
+  checkArxivConnection: () => ipcRenderer.invoke("checkArxivConnection"),
   saveFileMetadata: (file) => ipcRenderer.invoke("saveFileMetadata", file),
   openFileDirectory: (filePath) =>
     ipcRenderer.invoke("openFileDirectory", filePath),

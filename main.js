@@ -28,8 +28,102 @@ const axiosCommon = {
   timeout: 45000,
 };
 
+/** Probe ID for connectivity checks (fixture paper in this repo). */
+const ARXIV_PROBE_ID = "2312.07540";
+
 function isArxivFileName(fileName) {
-  return /^\d{4}\.\d{4,5}(v\d+)?$/.test(fileName);
+  return /^\d{4}\.\d{4,5}(v\d+)?$/i.test(String(fileName || "").trim());
+}
+
+/** Collect candidate arXiv ids from a PDF stem (strict name or embedded id). */
+function collectArxivIdsFromStem(stem) {
+  const ids = [];
+  const s = String(stem || "").trim();
+  if (!s) return ids;
+  if (isArxivFileName(s)) ids.push(s);
+  const embedded = s.match(/(\d{4}\.\d{4,5})(v\d+)?/i);
+  if (embedded) {
+    const base = embedded[1];
+    const ver = embedded[2] || "";
+    const withVer = `${base}${ver}`;
+    if (!ids.includes(withVer)) ids.push(withVer);
+    if (!ids.includes(base)) ids.push(base);
+  }
+  return ids;
+}
+
+function normalizeArxivText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value.replace(/\s+/g, " ").trim();
+  if (typeof value === "object") {
+    if (typeof value._ === "string") return value._.replace(/\s+/g, " ").trim();
+    if (typeof value["#text"] === "string") {
+      return value["#text"].replace(/\s+/g, " ").trim();
+    }
+  }
+  if (Array.isArray(value) && value.length) return normalizeArxivText(value[0]);
+  return String(value).replace(/\s+/g, " ").trim();
+}
+
+function formatArxivPublished(published) {
+  if (!published) return "";
+  const d = new Date(published);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+async function fetchArxivEntryByIds(ids) {
+  const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
+  for (const id of ids) {
+    const url = `https://export.arxiv.org/api/query?id_list=${encodeURIComponent(id)}`;
+    const response = await axios.get(url, {
+      ...axiosCommon,
+      headers: {
+        ...axiosCommon.headers,
+        Accept: "application/atom+xml, application/xml, text/xml, */*",
+      },
+      validateStatus: (status) => status >= 200 && status < 300,
+    });
+    const result = await parser.parseStringPromise(response.data);
+    const feed = result.feed || result;
+    let rawEntry = feed.entry;
+    if (!rawEntry) continue;
+    rawEntry = Array.isArray(rawEntry) ? rawEntry[0] : rawEntry;
+    const title = normalizeArxivText(rawEntry.title);
+    const summary = normalizeArxivText(rawEntry.summary);
+    if (rawEntry && (title || summary)) return rawEntry;
+  }
+  return null;
+}
+
+function buildArxivFileRow(filePath, stem, entry) {
+  const fileNameWithExt = path.basename(filePath);
+  const title = normalizeArxivText(entry.title) || stem;
+  const summary = normalizeArxivText(entry.summary);
+  const published = normalizeArxivText(entry.published);
+  const file = {
+    path: filePath,
+    name: fileNameWithExt,
+    originalname: fileNameWithExt,
+    key: filePath,
+    updatedFlag: true,
+    filename: stem,
+    title,
+    authors: parseArxivAuthors(entry),
+    summary,
+    year: formatArxivPublished(published),
+    journal: "arXiv",
+  };
+  return file;
+}
+
+function persistFileMetadata(file) {
+  return new Promise((resolve) => {
+    db.update({ _id: file.path }, { $set: file }, { upsert: true }, (err) => {
+      if (err) console.error("DB update:", err);
+      resolve(!err);
+    });
+  });
 }
 
 function fileRowFromPath(fullPath, doc) {
@@ -683,96 +777,60 @@ ipcMain.handle("openFileDirectory", async (event, filePath) => {
   }
 });
 
+ipcMain.handle("checkArxivConnection", async () => {
+  const started = Date.now();
+  try {
+    const entry = await fetchArxivEntryByIds([ARXIV_PROBE_ID]);
+    const latencyMs = Date.now() - started;
+    if (!entry) {
+      return {
+        ok: false,
+        latencyMs,
+        probeId: ARXIV_PROBE_ID,
+        error: "API responded but probe entry was missing",
+      };
+    }
+    return { ok: true, latencyMs, probeId: ARXIV_PROBE_ID };
+  } catch (error) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - started,
+      probeId: ARXIV_PROBE_ID,
+      error: error.message || String(error),
+    };
+  }
+});
+
 ipcMain.handle("readpdf", async (event, filePath) => {
+  if (!filePath || typeof filePath !== "string") {
+    return { ok: false, error: "Invalid file path" };
+  }
+
   const fileNameWithExt = path.basename(filePath);
   const ext = path.extname(filePath);
-  const stem = fileNameWithExt.replace(ext, "");
+  const stem = path.basename(fileNameWithExt, ext);
 
   try {
-    if (isArxivFileName(stem)) {
-      let entry = null;
-      const tryIds = [stem];
-      const m = stem.match(/^(\d{4}\.\d{4,5})v\d+$/);
-      if (m) tryIds.push(m[1]);
-
-      for (const id of tryIds) {
-        const url = `https://export.arxiv.org/api/query?id_list=${encodeURIComponent(
-          id
-        )}`;
-        const response = await axios.get(url, axiosCommon);
-        const parser = new xml2js.Parser({ explicitArray: false, mergeAttrs: true });
-        const result = await parser.parseStringPromise(response.data);
-        const feed = result.feed || result;
-        let rawEntry = feed.entry;
-        if (!rawEntry) continue;
-        rawEntry = Array.isArray(rawEntry) ? rawEntry[0] : rawEntry;
-        if (rawEntry && (rawEntry.title || rawEntry.summary)) {
-          entry = rawEntry;
-          break;
-        }
+    const arxivIds = collectArxivIdsFromStem(stem);
+    if (arxivIds.length > 0) {
+      const entry = await fetchArxivEntryByIds(arxivIds);
+      if (!entry) {
+        return {
+          ok: false,
+          error: `No arXiv metadata for id(s): ${arxivIds.join(", ")}`,
+        };
       }
-
-      if (!entry) return null;
-
-      const titleRaw = entry.title;
-      const title =
-        typeof titleRaw === "string"
-          ? titleRaw
-          : Array.isArray(titleRaw)
-            ? titleRaw[0]
-            : "";
-
-      const publishedRaw = entry.published;
-      const published =
-        typeof publishedRaw === "string"
-          ? publishedRaw
-          : Array.isArray(publishedRaw)
-            ? publishedRaw[0]
-            : publishedRaw;
-
-      const publishedDate = published ? new Date(published) : new Date();
-      const formattedDate = `${publishedDate.getFullYear()}-${String(
-        publishedDate.getMonth() + 1
-      ).padStart(2, "0")}`;
-
-      const summaryRaw = entry.summary;
-      const summary =
-        typeof summaryRaw === "string"
-          ? summaryRaw
-          : Array.isArray(summaryRaw)
-            ? summaryRaw[0]
-            : "";
-
-      const authors = parseArxivAuthors(entry);
-
-      const file = {
-        path: filePath,
-        name: fileNameWithExt,
-        originalname: fileNameWithExt,
-        key: filePath,
-        updatedFlag: true,
-        filename: stem,
-        title: String(title || stem).replace(/\s+/g, " ").trim(),
-        authors,
-        summary: String(summary || "")
-          .replace(/\s+/g, " ")
-          .trim(),
-        year: formattedDate,
-        journal: "arXiv",
-      };
-
-      db.update({ _id: file.path }, { $set: file }, { upsert: true }, (err) => {
-        if (err) console.error("DB update:", err);
-      });
-      return file;
+      const file = buildArxivFileRow(filePath, stem, entry);
+      await persistFileMetadata(file);
+      return { ok: true, file };
     }
 
-    const url = `https://api.crossref.org/works?query=${encodeURIComponent(
-      stem
-    )}`;
+    const url = `https://api.crossref.org/works?query=${encodeURIComponent(stem)}`;
     const response = await axios.get(url, axiosCommon);
     const items = response.data?.message?.items;
-    if (!items?.length) return null;
+    if (!items?.length) {
+      return { ok: false, error: "No Crossref results for this filename" };
+    }
 
     const data = items[0];
     const title = (data.title && data.title[0]) || stem;
@@ -802,12 +860,10 @@ ipcMain.handle("readpdf", async (event, filePath) => {
       journal: "crossref",
     };
 
-    db.update({ _id: file.path }, { $set: file }, { upsert: true }, (err) => {
-      if (err) console.error("DB update:", err);
-    });
-    return file;
+    await persistFileMetadata(file);
+    return { ok: true, file };
   } catch (error) {
     console.error("readpdf:", error.message || error);
-    return null;
+    return { ok: false, error: error.message || String(error) };
   }
 });

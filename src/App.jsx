@@ -15,6 +15,9 @@ import {
   Alert,
   Tree,
   Menu,
+  Badge,
+  Spin,
+  Tooltip,
 } from "antd";
 import { InboxOutlined, FolderAddOutlined, UploadOutlined } from "@ant-design/icons";
 import ItemList from "./components/ItemList.jsx";
@@ -172,9 +175,18 @@ function pdfStemFromPath(p) {
   return fileBaseName(p).replace(/\.pdf$/i, "");
 }
 
-/** Same rule as main `isArxivFileName` (stem only). */
+/** Same rule as main `isArxivFileName` (stem only, case-insensitive). */
 function isArxivStem(stem) {
-  return /^\d{4}\.\d{4,5}(v\d+)?$/i.test(stem);
+  return /^\d{4}\.\d{4,5}(v\d+)?$/i.test(String(stem || "").trim());
+}
+
+function editFormFromFileRow(row) {
+  return {
+    title: row?.title || "",
+    authors: row?.authors || "",
+    year: row?.year || "",
+    journal: row?.journal || "",
+  };
 }
 
 function App() {
@@ -225,6 +237,13 @@ function App() {
     journal: "",
   });
   const [uploadMetaLoading, setUploadMetaLoading] = useState(false);
+  const [arxivStatus, setArxivStatus] = useState({
+    state: "idle",
+    latencyMs: null,
+    error: null,
+    checkedAt: null,
+    probeId: "2312.07540",
+  });
 
   const applyLibrary = useCallback((payload) => {
     if (!payload?.rootPath) return;
@@ -445,21 +464,59 @@ function App() {
     setIsModalVisible(true);
   }
 
+  const runArxivConnectionCheck = useCallback(async () => {
+    setArxivStatus((prev) => ({ ...prev, state: "checking" }));
+    try {
+      const r = await window.electronAPI.checkArxivConnection();
+      setArxivStatus({
+        state: r?.ok ? "online" : "offline",
+        latencyMs: r?.latencyMs ?? null,
+        error: r?.error ?? null,
+        checkedAt: Date.now(),
+        probeId: r?.probeId || "2312.07540",
+      });
+    } catch (e) {
+      console.error(e);
+      setArxivStatus({
+        state: "offline",
+        latencyMs: null,
+        error: e?.message || "Connection check failed",
+        checkedAt: Date.now(),
+        probeId: "2312.07540",
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    runArxivConnectionCheck();
+    const timer = window.setInterval(runArxivConnectionCheck, 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [runArxivConnectionCheck]);
+
   async function updateInfo() {
+    const filePath = currentFile?.path || currentFile?.key;
+    if (!filePath) {
+      messageApi.warning("No file selected.");
+      return;
+    }
     setIsLoading(true);
     try {
-      const result = await window.electronAPI.readPdf(currentFile.path);
-      if (result) {
-        setCurrentFile(result);
+      const result = await window.electronAPI.readPdf(filePath);
+      if (result?.ok && result.file) {
+        const file = result.file;
+        setCurrentFile(file);
+        setEditForm(editFormFromFileRow(file));
         setAllFiles((prev) =>
-          prev.map((row) => (row.path === result.path ? { ...row, ...result } : row))
+          prev.map((row) => (row.path === file.path ? { ...row, ...file } : row))
         );
         setFilteredFiles((prev) =>
-          prev.map((row) => (row.path === result.path ? { ...row, ...result } : row))
+          prev.map((row) => (row.path === file.path ? { ...row, ...file } : row))
         );
         messageApi.success("Metadata updated.");
       } else {
-        messageApi.warning("Could not fetch metadata (network or filename).");
+        messageApi.warning(
+          result?.error || "Could not fetch metadata (network or filename)."
+        );
       }
     } catch (e) {
       console.error(e);
@@ -579,14 +636,9 @@ function App() {
     if (isArxivStem(stem)) {
       setUploadMetaLoading(true);
       try {
-        const row = await window.electronAPI.readPdf(destPath);
-        if (row) {
-          setUploadPanelForm({
-            title: row.title || "",
-            authors: row.authors || "",
-            year: row.year || "",
-            journal: row.journal || "",
-          });
+        const result = await window.electronAPI.readPdf(destPath);
+        if (result?.ok && result.file) {
+          setUploadPanelForm(editFormFromFileRow(result.file));
         } else {
           setUploadPanelForm({
             title: stem,
@@ -594,7 +646,9 @@ function App() {
             year: "",
             journal: "",
           });
-          messageApi.warning("Could not fetch arXiv metadata for this file.");
+          messageApi.warning(
+            result?.error || "Could not fetch arXiv metadata for this file."
+          );
         }
       } catch (e) {
         console.error(e);
@@ -817,9 +871,18 @@ function App() {
     }
   }
 
+  const arxivBadgeStatus =
+    arxivStatus.state === "online"
+      ? "success"
+      : arxivStatus.state === "offline"
+        ? "error"
+        : arxivStatus.state === "checking"
+          ? "processing"
+          : "default";
+
   return (
     <div className="App">
-      <Layout style={{ minHeight: "100vh" }}>
+      <Layout style={{ minHeight: "100vh", position: "relative" }}>
         <Sider
           width={320}
           style={{
@@ -1017,6 +1080,40 @@ function App() {
           </Content>
         </Layout>
       </Layout>
+      <div className="arxiv-connection-status" role="status" aria-live="polite">
+        <Badge status={arxivBadgeStatus} />
+        <Typography.Text strong style={{ fontSize: 12 }}>
+          arXiv
+        </Typography.Text>
+        {arxivStatus.state === "checking" ? (
+          <Spin size="small" />
+        ) : null}
+        {arxivStatus.state === "online" ? (
+          <Typography.Text type="success" style={{ fontSize: 12 }}>
+            Connected
+            {arxivStatus.latencyMs != null ? ` · ${arxivStatus.latencyMs} ms` : ""}
+          </Typography.Text>
+        ) : null}
+        {arxivStatus.state === "offline" ? (
+          <Tooltip title={arxivStatus.error || "Cannot reach export.arxiv.org"}>
+            <Typography.Text type="danger" style={{ fontSize: 12 }}>
+              Offline
+            </Typography.Text>
+          </Tooltip>
+        ) : null}
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          probe {arxivStatus.probeId}
+        </Typography.Text>
+        <Button
+          type="link"
+          size="small"
+          style={{ padding: 0, height: "auto", fontSize: 12 }}
+          disabled={arxivStatus.state === "checking"}
+          onClick={runArxivConnectionCheck}
+        >
+          Refresh
+        </Button>
+      </div>
       {ctxMenu ? (
         <div
           role="presentation"

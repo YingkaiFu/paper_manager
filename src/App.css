@@ -82,3 +82,20 @@
   font-size: 11px;
   line-height: 1.35;
 }
+
+/* Bottom-left arXiv API connectivity indicator */
+.arxiv-connection-status {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  max-width: min(420px, calc(100vw - 24px));
+}
