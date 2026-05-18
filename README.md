@@ -66,7 +66,3 @@ Issues and pull requests are welcome. When changing IPC shapes, update **`docs/m
 ## License
 
 GPL-3.0 — see `package.json` / `copyright` field in electron-builder config.
-
-## Author
-
-Yingkai Fu — `Yingkai.Fu@outlook.com`
