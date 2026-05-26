@@ -4,6 +4,87 @@
   min-height: 100vh;
 }
 
+.App > .ant-layout {
+  min-height: 100vh;
+}
+
+.app-main-split {
+  flex: 1;
+  min-height: 0;
+}
+
+.app-table-pane {
+  padding: 16px;
+  background: #fff7e6;
+  overflow: auto;
+  min-width: 0;
+}
+
+.pdf-preview-sider {
+  border-left: 1px solid #e8e8e8;
+  overflow: hidden;
+}
+
+.pdf-preview-sider .ant-layout-sider-children {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.paper-row-selected > td {
+  background: #e6f4ff !important;
+}
+
+.favorites-panel {
+  flex: 0 1 40%;
+  min-height: 120px;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #e8e8e8;
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.favorites-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-inline: 2px;
+}
+
+.favorites-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.favorites-list-item {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.favorites-list-item:hover {
+  background: #f0f0f0;
+}
+
+.favorites-list-item-active {
+  background: #e6f4ff;
+}
+
 /* Left sidebar: file explorer style */
 .app-file-browser {
   text-align: left;
@@ -17,8 +98,9 @@
   margin-inline: 0;
 }
 
-/* Ant Design DirectoryTree / Tree — flush left, full-width titles */
-.app-file-browser .pdf-directory-tree.ant-tree {
+/* Ant Design DirectoryTree / Tree — compact indent, flush left */
+.app-file-browser .pdf-directory-tree.ant-tree,
+.pdf-directory-tree.ant-tree {
   background: transparent;
   font-size: 13px;
 }
@@ -27,16 +109,49 @@
   align-items: stretch;
 }
 
-.app-file-browser .pdf-directory-tree .ant-tree-treenode {
+.app-file-browser .pdf-directory-tree .ant-tree-treenode,
+.pdf-directory-tree .ant-tree-treenode {
   padding-block: 1px;
+  padding-inline: 0;
+  gap: 2px;
 }
 
-.app-file-browser .pdf-directory-tree .ant-tree-node-content-wrapper {
+.app-file-browser .pdf-directory-tree .ant-tree-switcher,
+.pdf-directory-tree .ant-tree-switcher {
+  width: 14px;
+  margin-inline-end: 2px;
+  padding-inline: 0;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.app-file-browser .pdf-directory-tree .ant-tree-switcher-noop,
+.pdf-directory-tree .ant-tree-switcher-noop {
+  width: 6px;
+  margin-inline-end: 0;
+}
+
+.app-file-browser .pdf-directory-tree .ant-tree-indent-unit,
+.pdf-directory-tree .ant-tree-indent-unit {
+  width: 12px;
+}
+
+.app-file-browser .pdf-directory-tree .ant-tree-node-content-wrapper,
+.pdf-directory-tree .ant-tree-node-content-wrapper {
   text-align: left;
   justify-content: flex-start;
   flex: 1;
   min-width: 0;
   border-radius: 4px;
+  padding-inline: 2px 4px;
+  margin-inline-start: 0;
+  gap: 4px;
+}
+
+.app-file-browser .pdf-directory-tree .ant-tree-node-content-wrapper .ant-tree-iconEle,
+.pdf-directory-tree .ant-tree-node-content-wrapper .ant-tree-iconEle {
+  margin-inline: 0 4px;
+  width: 14px;
 }
 
 .app-file-browser .pdf-directory-tree .ant-tree-title {
@@ -44,10 +159,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.app-file-browser .pdf-directory-tree .ant-tree-switcher {
-  align-self: center;
 }
 
 /* Upload zone in sidebar */

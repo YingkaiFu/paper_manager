@@ -6,12 +6,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   initFolder: () => ipcRenderer.invoke("initFolder"),
   setLastUploadDir: (dirPath) => ipcRenderer.invoke("setLastUploadDir", dirPath),
   openFile: (filePath) => ipcRenderer.invoke("openFile", filePath),
+  readPdfBytes: (filePath) => ipcRenderer.invoke("readPdfBytes", filePath),
   deleteFile: (filePath) => ipcRenderer.invoke("deleteFile", filePath),
   uploadFile: (fileName, sourcePath, destinationPath) =>
     ipcRenderer.invoke("uploadFile", { fileName, sourcePath, destinationPath }),
   downloadPdfFromUrl: (payload) =>
     ipcRenderer.invoke("downloadPdfFromUrl", payload),
   readPdf: (filePath) => ipcRenderer.invoke("readpdf", filePath),
+  cancelReadPdf: () => Promise.resolve(),
   checkArxivConnection: () => ipcRenderer.invoke("checkArxivConnection"),
   saveFileMetadata: (file) => ipcRenderer.invoke("saveFileMetadata", file),
   openFileDirectory: (filePath) =>
@@ -20,4 +22,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   renameEntry: (payload) => ipcRenderer.invoke("renameEntry", payload),
   deleteEntry: (payload) => ipcRenderer.invoke("deleteEntry", payload),
   moveEntry: (payload) => ipcRenderer.invoke("moveEntry", payload),
+  getFavorites: () => ipcRenderer.invoke("getFavorites"),
+  toggleFavorite: (filePath) => ipcRenderer.invoke("toggleFavorite", filePath),
 });

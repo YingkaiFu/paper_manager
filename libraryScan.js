@@ -25,7 +25,7 @@ function buildPdfTreeNodes(dirPath) {
       nodes.push({
         title: ent.name,
         key: full,
-        selectable: false,
+        selectable: true,
         children,
       });
     } else if (ent.isFile() && path.extname(ent.name).toLowerCase() === ".pdf") {

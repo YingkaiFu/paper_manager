@@ -1,5 +1,5 @@
 import "./App.css";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Layout,
   Button,
@@ -19,8 +19,11 @@ import {
   Spin,
   Tooltip,
 } from "antd";
-import { InboxOutlined, FolderAddOutlined, UploadOutlined } from "@ant-design/icons";
+import { InboxOutlined, FolderAddOutlined, UploadOutlined, MoreOutlined } from "@ant-design/icons";
 import ItemList from "./components/ItemList.jsx";
+import PdfViewer from "./components/PdfViewer.jsx";
+import TableColumnSettings from "./components/TableColumnSettings.jsx";
+import { loadTableColumnPrefs } from "./tableColumns.js";
 
 const { DirectoryTree } = Tree;
 const { Header, Sider, Content } = Layout;
@@ -137,15 +140,31 @@ function eventNodeKey(node) {
   return node.key ?? node.eventKey ?? node.props?.eventKey ?? null;
 }
 
+function isDirectChildOfRoot(treeNodes, rootPath, key) {
+  if (!rootPath || !key || !treeNodes?.length) return false;
+  const root = treeNodes.find((n) => n.key === rootPath);
+  return Boolean(root?.children?.some((c) => c.key === key));
+}
+
 /**
  * Drop *into* a folder: rc-tree uses dropPosition 0 on the folder row lower zone.
  * For **empty** folders it often only offers gap positions (±1); treat those as move-into.
+ * Gap drops between root-level items move into the library root folder.
  */
-function allowTreeFilesystemDrop({ dragNode, dropNode, dropPosition }) {
-  if (!dropNode || dropNode.isLeaf) return false;
+function allowTreeFilesystemDrop({ dragNode, dropNode, dropPosition, rootPath, treeNodes }) {
   const src = dragNode?.key;
   const dst = dropNode?.key;
   if (!src || !dst || src === dst) return false;
+
+  if (
+    rootPath &&
+    isDirectChildOfRoot(treeNodes, rootPath, dropNode?.key) &&
+    (dropPosition === 1 || dropPosition === -1)
+  ) {
+    return true;
+  }
+
+  if (!dropNode || dropNode.isLeaf) return false;
   const dragIsDir = !dragNode.isLeaf;
   if (dragIsDir) {
     const dn = normPathKey(dst);
@@ -208,6 +227,7 @@ function App() {
     journal: "",
   });
   const [isLoading, setIsLoading] = useState(false);
+  const metadataFetchRef = useRef({ cancelled: false });
   const [messageApi, contextHolder] = message.useMessage();
   const [formLayout] = useState("horizontal");
 
@@ -237,6 +257,11 @@ function App() {
     journal: "",
   });
   const [uploadMetaLoading, setUploadMetaLoading] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [favoritePaths, setFavoritePaths] = useState([]);
+  const [activeFavoritePath, setActiveFavoritePath] = useState("");
+  const [columnPrefs, setColumnPrefs] = useState(() => loadTableColumnPrefs());
+  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
   const [arxivStatus, setArxivStatus] = useState({
     state: "idle",
     latencyMs: null,
@@ -244,6 +269,71 @@ function App() {
     checkedAt: null,
     probeId: "2312.07540",
   });
+
+  const favoritePathSet = useMemo(() => new Set(favoritePaths), [favoritePaths]);
+
+  const favoriteItems = useMemo(() => {
+    if (!favoritePaths.length) return [];
+    const order = new Map(favoritePaths.map((p, i) => [p, i]));
+    return allFiles
+      .filter((f) => favoritePathSet.has(f.path) || favoritePathSet.has(f.key))
+      .sort(
+        (a, b) =>
+          (order.get(a.path) ?? order.get(a.key) ?? 0) -
+          (order.get(b.path) ?? order.get(b.key) ?? 0)
+      );
+  }, [allFiles, favoritePaths, favoritePathSet]);
+
+  const loadFavorites = useCallback(async () => {
+    try {
+      const paths = await window.electronAPI.getFavorites();
+      setFavoritePaths(Array.isArray(paths) ? paths : []);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFavorites();
+  }, [loadFavorites]);
+
+  const toggleFavorite = useCallback(
+    async (file) => {
+      const path = file?.path || file?.key;
+      if (!path) return;
+      try {
+        const result = await window.electronAPI.toggleFavorite(path);
+        const nextPaths = Array.isArray(result?.paths) ? result.paths : [];
+        setFavoritePaths(nextPaths);
+        if (!result?.favorited) {
+          setFilteredFiles((prev) =>
+            prev.filter((row) => (row.path || row.key) !== path)
+          );
+          if (activeFavoritePath === path) setActiveFavoritePath("");
+        }
+        messageApi.success(result?.favorited ? "Added to favorites." : "Removed from favorites.");
+      } catch (e) {
+        console.error(e);
+        messageApi.error("Could not update favorites.");
+      }
+    },
+    [activeFavoritePath, messageApi]
+  );
+
+  const showAllFavorites = useCallback(() => {
+    setSelectedTreeKeys([]);
+    setTreeFilterDir("");
+    setActiveFavoritePath("");
+    setFilteredFiles(favoriteItems);
+  }, [favoriteItems]);
+
+  const selectFavorite = useCallback((file) => {
+    const path = file.path || file.key;
+    setSelectedTreeKeys([]);
+    setTreeFilterDir("");
+    setActiveFavoritePath(path);
+    setFilteredFiles([file]);
+  }, []);
 
   const applyLibrary = useCallback((payload) => {
     if (!payload?.rootPath) return;
@@ -253,7 +343,7 @@ function App() {
     setFilteredFiles(payload.files || []);
     setTreeFilterDir("");
     setUploadTargetDir(payload.lastUploadDir || payload.rootPath);
-    setExpandedKeys(defaultExpandKeys(payload.treeData || [], 3));
+    setExpandedKeys([payload.rootPath, ...defaultExpandKeys(payload.treeData || [], 2)]);
     setSelectedTreeKeys([]);
   }, []);
 
@@ -292,25 +382,46 @@ function App() {
     }
   };
 
+  const applyTreeNodeSelection = useCallback(
+    (node) => {
+      const key = node?.key;
+      if (!key) return;
+      setSelectedTreeKeys([key]);
+      setActiveFavoritePath("");
+
+      if (key === rootPath) {
+        setTreeFilterDir("");
+        setUploadTargetDir(rootPath);
+        setFilteredFiles(allFiles);
+        return;
+      }
+
+      const isLeaf = node.isLeaf === true;
+      if (isLeaf) {
+        setTreeFilterDir("");
+        setFilteredFiles(allFiles.filter((f) => f.path === key));
+        const parent = key.replace(/[/\\][^/\\]+$/, "");
+        setUploadTargetDir(parent || rootPath);
+      } else {
+        setTreeFilterDir(key);
+        setUploadTargetDir(key);
+        setFilteredFiles(allFiles.filter((f) => pathIsUnderDir(f.path, key)));
+      }
+    },
+    [allFiles, rootPath]
+  );
+
   const onTreeSelect = (keys, info) => {
+    if (info?.node) {
+      applyTreeNodeSelection(info.node);
+      return;
+    }
     const key = keys[0];
     setSelectedTreeKeys(keys);
     if (!key) {
       setTreeFilterDir("");
       setUploadTargetDir(rootPath);
       setFilteredFiles(allFiles);
-      return;
-    }
-    const isLeaf = info?.node?.isLeaf === true;
-    if (isLeaf) {
-      setTreeFilterDir("");
-      setFilteredFiles(allFiles.filter((f) => f.path === key));
-      const parent = key.replace(/[/\\][^/\\]+$/, "");
-      setUploadTargetDir(parent || rootPath);
-    } else {
-      setTreeFilterDir(key);
-      setUploadTargetDir(key);
-      setFilteredFiles(allFiles.filter((f) => pathIsUnderDir(f.path, key)));
     }
   };
 
@@ -325,8 +436,8 @@ function App() {
     if (result) applyLibrary(result);
   }
 
-  async function openFile(file) {
-    await window.electronAPI.openFile(file.key);
+  function openFile(file) {
+    setPreviewFile(file);
   }
 
   function openFileDirectory(file) {
@@ -336,8 +447,18 @@ function App() {
   async function deleteFile(file) {
     const ok = await window.electronAPI.deleteFile(file.key);
     if (ok) {
+      if (
+        previewFile &&
+        (previewFile.path === file.path || previewFile.key === file.key)
+      ) {
+        setPreviewFile(null);
+      }
+      if (activeFavoritePath === file.path || activeFavoritePath === file.key) {
+        setActiveFavoritePath("");
+      }
       messageApi.success("Deleted.");
       await refreshFromDisk();
+      await loadFavorites();
     } else {
       messageApi.error("Delete failed.");
     }
@@ -356,7 +477,23 @@ function App() {
         return false;
       }
       messageApi.success("Moved.");
+      if (previewFile?.path === sourcePath && r.newPath) {
+        setPreviewFile((prev) =>
+          prev
+            ? {
+                ...prev,
+                path: r.newPath,
+                key: r.newPath,
+                name: fileBaseName(r.newPath),
+              }
+            : null
+        );
+      }
       const payload = await refreshFromDisk();
+      await loadFavorites();
+      if (activeFavoritePath === sourcePath && r.newPath) {
+        setActiveFavoritePath(r.newPath);
+      }
       if (r.newPath && payload?.files) {
         const extras = expandKeysForPath(rootPath, r.newPath);
         setExpandedKeys((prev) =>
@@ -385,22 +522,42 @@ function App() {
     }
   }
 
+  const displayTreeData = useMemo(() => {
+    if (!rootPath) return [];
+    return [
+      {
+        title: fileBaseName(rootPath) || rootPath,
+        key: rootPath,
+        isLeaf: false,
+        selectable: true,
+        children: treeData,
+      },
+    ];
+  }, [rootPath, treeData]);
+
   async function onTreeDrop(info) {
     if (!rootPath) return;
     const destKey = eventNodeKey(info.node);
     const dragKey = eventNodeKey(info.dragNode);
     if (!destKey || !dragKey || dragKey === destKey) return;
 
-    const dataNode = findTreeDataNode(treeData, destKey) || info.node;
-    if (!dataNode || dataNode.isLeaf) return;
-
+    const dataNode = findTreeDataNode(displayTreeData, destKey) || info.node;
     let destDir = null;
+
     if (!info.dropToGap) {
+      if (!dataNode || dataNode.isLeaf) return;
       destDir = destKey;
     } else if (isEmptyFolderDataNode(dataNode)) {
       destDir = destKey;
+    } else if (isDirectChildOfRoot(displayTreeData, rootPath, destKey)) {
+      destDir = rootPath;
+    } else {
+      return;
     }
     if (!destDir) return;
+
+    const srcParent = dragKey.replace(/[/\\][^/\\]+$/, "");
+    if (normPathKey(destDir) === normPathKey(srcParent)) return;
 
     await performMove(dragKey, destDir);
   }
@@ -457,7 +614,16 @@ function App() {
     });
   };
 
-  const handleCancel = () => setIsModalVisible(false);
+  const stopMetadataFetch = useCallback(() => {
+    metadataFetchRef.current.cancelled = true;
+    window.electronAPI.cancelReadPdf?.();
+    setIsLoading(false);
+  }, []);
+
+  const handleCancel = () => {
+    stopMetadataFetch();
+    setIsModalVisible(false);
+  };
 
   async function getInfo(file) {
     setCurrentFile(file);
@@ -499,9 +665,11 @@ function App() {
       messageApi.warning("No file selected.");
       return;
     }
+    metadataFetchRef.current = { cancelled: false };
     setIsLoading(true);
     try {
       const result = await window.electronAPI.readPdf(filePath);
+      if (metadataFetchRef.current.cancelled || result?.cancelled) return;
       if (result?.ok && result.file) {
         const file = result.file;
         setCurrentFile(file);
@@ -519,10 +687,13 @@ function App() {
         );
       }
     } catch (e) {
+      if (metadataFetchRef.current.cancelled) return;
       console.error(e);
       messageApi.error("Metadata request failed.");
     } finally {
-      setIsLoading(false);
+      if (!metadataFetchRef.current.cancelled) {
+        setIsLoading(false);
+      }
     }
   }
 
@@ -901,15 +1072,6 @@ function App() {
             <Typography.Title level={4} style={{ margin: 0, textAlign: "left" }}>
               Files
             </Typography.Title>
-            <Typography.Text
-              type="secondary"
-              style={{ fontSize: 12, textAlign: "left", display: "block" }}
-            >
-              Drag PDFs or folders onto a folder to move. Empty folders accept drops on the
-              whole row (including the top half); folders with contents work best on the
-              lower half of the row or when expanded. Right‑click includes Move to… and more.
-              Use + for a new folder and the upload icon to add PDFs (pick the destination inside the upload window).
-            </Typography.Text>
             <Space.Compact block style={{ width: "100%" }}>
               <Button type="primary" onClick={openLibrary} style={{ flex: 1 }}>
                 Open folder
@@ -941,28 +1103,36 @@ function App() {
             <div
               className="pdf-tree-scroll"
               style={{
-                flex: 1,
+                flex: "1 1 55%",
                 overflow: "auto",
                 minHeight: 0,
-                marginInline: -4,
-                paddingInline: 4,
+                marginInline: 0,
+                paddingInline: 0,
                 textAlign: "left",
               }}
             >
-              {treeData.length > 0 ? (
+              {displayTreeData.length > 0 ? (
                 <DirectoryTree
                   className="pdf-directory-tree"
                   blockNode
                   showIcon
+                  indent={12}
                   expandAction="click"
                   draggable={{ icon: false }}
-                  allowDrop={allowTreeFilesystemDrop}
+                  allowDrop={(info) =>
+                    allowTreeFilesystemDrop({
+                      ...info,
+                      rootPath,
+                      treeNodes: displayTreeData,
+                    })
+                  }
                   onDrop={onTreeDrop}
-                  treeData={treeData}
+                  treeData={displayTreeData}
                   expandedKeys={expandedKeys}
                   selectedKeys={selectedTreeKeys}
                   onExpand={setExpandedKeys}
                   onSelect={onTreeSelect}
+                  onClick={(_e, node) => applyTreeNodeSelection(node)}
                   onRightClick={onTreeRightClick}
                 />
               ) : (
@@ -974,9 +1144,48 @@ function App() {
                 </Typography.Text>
               )}
             </div>
+            <div className="favorites-panel">
+              <div className="favorites-panel-header">
+                <Typography.Title level={5} style={{ margin: 0 }}>
+                  收藏
+                </Typography.Title>
+                <Button
+                  type="link"
+                  size="small"
+                  disabled={!favoriteItems.length}
+                  onClick={showAllFavorites}
+                  style={{ padding: 0, height: "auto" }}
+                >
+                  全部 ({favoriteItems.length})
+                </Button>
+              </div>
+              <div className="favorites-list-scroll">
+                {favoriteItems.length === 0 ? (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    在列表 Action 中点击星标收藏论文
+                  </Typography.Text>
+                ) : (
+                  favoriteItems.map((item) => {
+                    const path = item.path || item.key;
+                    const active = activeFavoritePath === path;
+                    return (
+                      <button
+                        key={path}
+                        type="button"
+                        className={`favorites-list-item${active ? " favorites-list-item-active" : ""}`}
+                        title={item.title}
+                        onClick={() => selectFavorite(item)}
+                      >
+                        <Typography.Text ellipsis>{item.title}</Typography.Text>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </Flex>
         </Sider>
-        <Layout>
+        <Layout style={{ flex: 1, minHeight: 0 }}>
           <Header
             style={{
               background: "#fafafa",
@@ -986,29 +1195,53 @@ function App() {
             }}
           >
             {contextHolder}
-            <Row align="middle" gutter={16}>
+            <div className="app-header-toolbar">
               <Search
+                className="app-header-search"
                 placeholder="Search by title"
                 onSearch={handleSearch}
                 allowClear
-                style={{ maxWidth: 420 }}
                 enterButton
               />
-            </Row>
+              <Tooltip title="表格列设置">
+                <Button
+                  type="text"
+                  icon={<MoreOutlined style={{ fontSize: 20 }} />}
+                  aria-label="表格列设置"
+                  onClick={() => setColumnSettingsOpen(true)}
+                />
+              </Tooltip>
+            </div>
           </Header>
-          <Content style={{ padding: 16, background: "#fff7e6" }}>
-            <ItemList
-              items={filteredFiles}
-              openFile={openFile}
-              deleteFile={deleteFile}
-              getInfo={getInfo}
-              openFileDirectory={openFileDirectory}
-            />
+          <Layout className="app-main-split">
+            <Content className="app-table-pane">
+              <ItemList
+                items={filteredFiles}
+                openFile={openFile}
+                deleteFile={deleteFile}
+                getInfo={getInfo}
+                openFileDirectory={openFileDirectory}
+                selectedPath={previewFile?.path || previewFile?.key}
+                favoritePaths={favoritePathSet}
+                onToggleFavorite={toggleFavorite}
+                columnPrefs={columnPrefs}
+              />
+            </Content>
+            {previewFile ? (
+              <Sider width={480} theme="light" className="pdf-preview-sider">
+                <PdfViewer
+                  filePath={previewFile.path || previewFile.key}
+                  title={previewFile.title}
+                  onClose={() => setPreviewFile(null)}
+                />
+              </Sider>
+            ) : null}
+          </Layout>
             <Modal
               title="PDF metadata"
               open={isModalVisible}
               onCancel={handleCancel}
-              confirmLoading={isLoading}
+              confirmLoading={false}
               footer={null}
               width={600}
             >
@@ -1023,9 +1256,15 @@ function App() {
                 </Form.Item>
                 <Form.Item label="Fetch">
                   <Space>
-                    <Button type="primary" loading={isLoading} onClick={updateInfo}>
-                      Fetch arXiv / Crossref
-                    </Button>
+                    {isLoading ? (
+                      <Button danger onClick={stopMetadataFetch}>
+                        Stop fetch
+                      </Button>
+                    ) : (
+                      <Button type="primary" onClick={updateInfo}>
+                        Fetch arXiv / Crossref
+                      </Button>
+                    )}
                     <Button danger onClick={handleReset}>
                       Reset fields
                     </Button>
@@ -1077,7 +1316,6 @@ function App() {
                 </Form.Item>
               </Form>
             </Modal>
-          </Content>
         </Layout>
       </Layout>
       <div className="arxiv-connection-status" role="status" aria-live="polite">
@@ -1211,6 +1449,7 @@ function App() {
             className="pdf-directory-tree pdf-move-picker-tree"
             blockNode
             showIcon
+            indent={12}
             expandAction="click"
             treeData={movePickerTree}
             expandedKeys={movePickerExpanded}
@@ -1253,6 +1492,7 @@ function App() {
             className="pdf-directory-tree pdf-upload-picker-tree"
             blockNode
             showIcon
+            indent={12}
             expandAction="click"
             treeData={uploadPickerTree}
             expandedKeys={uploadPickerExpanded}
@@ -1298,7 +1538,11 @@ function App() {
               return;
             }
             try {
-              const r = await window.electronAPI.uploadFile(file.name, file.path, dest);
+              const r = await window.electronAPI.uploadFile(
+                file.name,
+                file.path || file,
+                dest
+              );
               if (r?.ok && r.destPath) {
                 onSuccess({ destPath: r.destPath, name: file.name });
               } else {
@@ -1394,6 +1638,12 @@ function App() {
           </Form.Item>
         </Form>
       </Modal>
+      <TableColumnSettings
+        open={columnSettingsOpen}
+        onClose={() => setColumnSettingsOpen(false)}
+        columnPrefs={columnPrefs}
+        onChange={setColumnPrefs}
+      />
     </div>
   );
 }

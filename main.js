@@ -126,6 +126,46 @@ function persistFileMetadata(file) {
   });
 }
 
+function formatAddedAt(input) {
+  const d = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+async function getAddedAtFromFileStat(filePath) {
+  try {
+    const stat = await fsPromises.stat(filePath);
+    const created =
+      stat.birthtime instanceof Date && !Number.isNaN(stat.birthtime.getTime())
+        ? stat.birthtime
+        : stat.ctime;
+    return formatAddedAt(created);
+  } catch {
+    return formatAddedAt(new Date());
+  }
+}
+
+async function resolveFileRowWithAddedAt(fullPath, doc) {
+  const row = fileRowFromPath(fullPath, doc);
+  if (row.addedAt) return row;
+  row.addedAt = await getAddedAtFromFileStat(fullPath);
+  await persistFileMetadata(row);
+  return row;
+}
+
+async function stampNewFileAddedAt(destPath) {
+  const doc = await new Promise((resolve) => {
+    db.findOne({ _id: destPath }, (err, found) => resolve(!err && found ? found : null));
+  });
+  const row = fileRowFromPath(destPath, doc);
+  if (row.addedAt) return;
+  row.addedAt = formatAddedAt(new Date());
+  await persistFileMetadata(row);
+}
+
 function fileRowFromPath(fullPath, doc) {
   const ext = path.extname(fullPath);
   const stem = path.basename(fullPath, ext);
@@ -141,6 +181,7 @@ function fileRowFromPath(fullPath, doc) {
     journal: "",
     summary: "",
     updatedFlag: false,
+    addedAt: "",
   };
   if (!doc) return base;
   const { _id, ...rest } = doc;
@@ -153,9 +194,11 @@ function scanLibrary(db, rootPath) {
   return Promise.all(
     paths.map(
       (p) =>
-        new Promise((resolve) => {
+        new Promise((resolve, reject) => {
           db.findOne({ $or: [{ path: p }, { _id: p }] }, (err, doc) => {
-            resolve(fileRowFromPath(p, !err && doc ? doc : null));
+            resolveFileRowWithAddedAt(p, !err && doc ? doc : null)
+              .then(resolve)
+              .catch(reject);
           });
         })
     )
@@ -399,6 +442,67 @@ ipcMain.handle("saveFileMetadata", async (event, file) => {
   });
 });
 
+function getFavoritePaths() {
+  return new Promise((resolve) => {
+    db.findOne({ _id: "favorites" }, (err, doc) => {
+      resolve(!err && Array.isArray(doc?.paths) ? doc.paths : []);
+    });
+  });
+}
+
+function setFavoritePaths(paths) {
+  return new Promise((resolve, reject) => {
+    db.update(
+      { _id: "favorites" },
+      { $set: { paths } },
+      { upsert: true },
+      (err) => (err ? reject(err) : resolve())
+    );
+  });
+}
+
+async function migrateFavoritePath(oldPath, newPath) {
+  const paths = await getFavoritePaths();
+  const idx = paths.indexOf(oldPath);
+  if (idx < 0) return;
+  paths[idx] = newPath;
+  await setFavoritePaths(paths);
+}
+
+async function removeFavoritePath(filePath) {
+  const paths = await getFavoritePaths();
+  const next = paths.filter((p) => p !== filePath);
+  if (next.length !== paths.length) await setFavoritePaths(next);
+}
+
+async function removeFavoritesUnderDir(dirPath) {
+  const paths = await getFavoritePaths();
+  const base = path.resolve(dirPath) + path.sep;
+  const next = paths.filter((p) => {
+    const abs = path.resolve(p);
+    return abs !== path.resolve(dirPath) && !abs.startsWith(base);
+  });
+  if (next.length !== paths.length) await setFavoritePaths(next);
+}
+
+ipcMain.handle("getFavorites", async () => getFavoritePaths());
+
+ipcMain.handle("toggleFavorite", async (event, filePath) => {
+  if (!filePath || typeof filePath !== "string") {
+    return { paths: await getFavoritePaths(), favorited: false };
+  }
+  const paths = await getFavoritePaths();
+  const idx = paths.indexOf(filePath);
+  if (idx >= 0) {
+    paths.splice(idx, 1);
+    await setFavoritePaths(paths);
+    return { paths, favorited: false };
+  }
+  paths.push(filePath);
+  await setFavoritePaths(paths);
+  return { paths, favorited: true };
+});
+
 ipcMain.handle("openFile", async (event, filePath) => {
   const err = await shell.openPath(filePath);
   if (err) console.error("Error opening file:", err);
@@ -410,6 +514,7 @@ ipcMain.handle("deleteFile", async (event, filePath) => {
     await new Promise((resolve) => {
       db.remove({ _id: filePath }, { multi: false }, () => resolve());
     });
+    await removeFavoritePath(filePath);
     return true;
   } catch (err) {
     console.error("File delete failed:", err);
@@ -570,6 +675,7 @@ ipcMain.handle(
         await migrateNedbAfterDirRename(src, newPath);
       } else if (srcStat.isFile() && src.toLowerCase().endsWith(".pdf")) {
         await migratePdfDocId(src, newPath);
+        await migrateFavoritePath(src, newPath);
       }
       return { ok: true, newPath };
     } catch (e) {
@@ -604,6 +710,7 @@ ipcMain.handle(
         await migrateNedbAfterDirRename(oldPath, newPath);
       } else if (stat.isFile() && oldPath.toLowerCase().endsWith(".pdf")) {
         await migratePdfDocId(oldPath, newPath);
+        await migrateFavoritePath(oldPath, newPath);
       }
       return { ok: true };
     } catch (e) {
@@ -624,6 +731,7 @@ ipcMain.handle("deleteEntry", async (event, { rootPath, targetPath }) => {
     if (stat.isDirectory()) {
       const base = path.resolve(targetPath) + path.sep;
       await fsPromises.rm(targetPath, { recursive: true, force: true });
+      await removeFavoritesUnderDir(targetPath);
       await new Promise((resolve) => {
         db.find({ _id: { $ne: "folderData" } }, (err, docs) => {
           if (err || !docs?.length) {
@@ -652,6 +760,7 @@ ipcMain.handle("deleteEntry", async (event, { rootPath, targetPath }) => {
       });
     } else {
       await fsPromises.unlink(targetPath);
+      await removeFavoritePath(targetPath);
       await new Promise((resolve) => {
         db.remove({ _id: targetPath }, {}, () => resolve());
       });
@@ -669,6 +778,7 @@ ipcMain.handle(
       await fsPromises.mkdir(destinationPath, { recursive: true });
       const destPath = path.join(destinationPath, fileName);
       await fsPromises.cp(sourcePath, destPath);
+      await stampNewFileAddedAt(destPath);
       return { ok: true, destPath };
     } catch (err) {
       console.error("File copy failed:", err);
@@ -751,6 +861,7 @@ ipcMain.handle(
         return { ok: false, error: "Response is not a PDF file" };
       }
       await fsPromises.writeFile(destPath, buf);
+      await stampNewFileAddedAt(destPath);
       if (!isUnderRoot(rootPath, destPath)) {
         await fsPromises.unlink(destPath).catch(() => {});
         return { ok: false, error: "Invalid target path" };
@@ -798,6 +909,26 @@ ipcMain.handle("checkArxivConnection", async () => {
       probeId: ARXIV_PROBE_ID,
       error: error.message || String(error),
     };
+  }
+});
+
+ipcMain.handle("readPdfBytes", async (event, filePath) => {
+  if (!filePath || typeof filePath !== "string") {
+    return { ok: false, error: "Invalid file path" };
+  }
+  try {
+    const stat = await fsPromises.stat(filePath);
+    if (!stat.isFile()) {
+      return { ok: false, error: "Not a file" };
+    }
+    const buf = await fsPromises.readFile(filePath);
+    if (buf.length < 5 || buf.slice(0, 5).toString("ascii") !== "%PDF-") {
+      return { ok: false, error: "Not a PDF file" };
+    }
+    return { ok: true, encoding: "base64", data: buf.toString("base64") };
+  } catch (e) {
+    console.error("readPdfBytes:", e);
+    return { ok: false, error: e.message || String(e) };
   }
 });
 
